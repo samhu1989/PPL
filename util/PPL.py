@@ -5,6 +5,7 @@ import tensorflow as tf;
 import numpy as np;
 import matplotlib.pyplot as plt;
 import os;
+from PyQt5.QtCore import Qt,pyqtSignal,pyqtSlot;
 
 class PPBase(object):
     def __init__(self,dev):
@@ -13,13 +14,15 @@ class PPBase(object):
             self.__get_deformed_box__();
             self.__get_perspect_mat__();
             self.__get_project__();
+            self.__get_viewport_map__();
             self.__get_loss__();
             self.__get_opt__();
+            
     def __get_box__(self):
         self.box = tf.constant(
                 [ 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,-0.1,
                  -0.1, 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,
-                 -0.2, -0.2, -0.2, -0.2,-0.3,-0.3,-0.3,-0.3],dtype=tf.float32,shape=[3,8],name="box");
+                  0.1, 0.1, 0.1, 0.1,-0.1,-0.1,-0.1,-0.1],dtype=tf.float32,shape=[3,8],name="box");
     def __get_deformed_box__(self):
         scale_shape = [3,1];
         scale_init  = tf.constant_initializer([1.0,1.0,1.0]);
@@ -28,39 +31,48 @@ class PPBase(object):
         t_init  = tf.constant_initializer([0.0,0.0,0.0]);
         self.t = tf.get_variable(shape=t_shape,initializer=t_init ,trainable=True,name='t');
         self.deformed_box = tf.multiply(self.box,self.scale);
-        self.deformed_box = tf.add(self.deformed_box,self.t,name="deformed_box");        
+        self.deformed_box = tf.add(self.deformed_box,self.t,name="deformed_box");
+        self.homo_deformed_box = tf.concat([self.deformed_box,tf.ones(shape=[1,8])],0,name="homo_deformed_box");        
             
     def __get_perspect_mat__(self):
-        self.fovAngle = np.pi / 4;
+        self.fovAngle = np.pi / 2;
         self.fovFar = 1000.0;
         self.fovNear = 0.1;
         self.fovAspect = 1.0;
-        cot = 1.0 / np.tan(self.fovAngle/2.0);
+        self.cot = 1.0 / np.tan(self.fovAngle/2.0);
         f = self.fovFar;
         n = self.fovNear;
         self.perspect_mat = tf.constant(
-            [cot/self.fovAspect,0,0,0,
-             0,cot,0,0,
-             0,0,-(f+n)/(f-n),-1.0,
-             0,0,-2*f*n/(f-n),0
+            [self.cot/self.fovAspect,0,0,0,
+             0,self.cot,0,0,
+             0,0,-(f+n)/(f-n),-2*f*n/(f-n),
+             0,0,-1.0,0
             ],dtype=tf.float32,shape=[4,4],name="perspect_mat");
      
     def __get_project__(self):
-        self.homo_box = tf.concat([self.deformed_box,tf.ones(shape=[1,8])],0);
-        self.project_box = tf.matmul(self.perspect_mat,self.homo_box,name="project_box");
+        self.project_box = tf.matmul(self.perspect_mat,self.homo_deformed_box,name="project_box");
         norm_factor_shape = [1,8];
         norm_factor_init  = tf.constant_initializer([2.0]);
         self.norm_factor = tf.get_variable(shape=norm_factor_shape,initializer=norm_factor_init ,trainable=True,name='norm_factor');
         self.out = tf.multiply(self.norm_factor,self.project_box,name="out");
-        self.out_xy_idx = tf.constant([0,1],dtype=tf.int32,shape=[2],name="out_xy_idx");
-        out_xy = tf.gather(self.out,self.out_xy_idx);
-        offset_shape = [2,1];
-        offset_init  = tf.constant_initializer([0.0,0.0]);
-        self.offset = tf.get_variable(shape=offset_shape,initializer=offset_init ,trainable=True,name='offset');
-        self.out_xy = tf.add(out_xy,self.offset,name="out_xy");
+        #
         w_idx = tf.constant([3],dtype=tf.int32,shape=[1]);
         w = tf.gather(self.project_box,w_idx);
         self.out_hard = self.project_box / w; 
+
+        
+    def __get_viewport_map__(self):
+        offset_shape = [2,1];
+        offset_init  = tf.constant_initializer([0.0,0.0]);
+        self.offset = tf.get_variable(shape=offset_shape,initializer=offset_init ,trainable=True,name='offset');
+        self.extern_offset = tf.placeholder(tf.float32,shape=[2,1],name='extern_offset');
+        self.set_offset = tf.assign(self.offset,self.extern_offset);
+        
+        self.out_xy_idx = tf.constant([0,1],dtype=tf.int32,shape=[2],name="out_xy_idx");
+        
+        out_xy = tf.gather(self.out,self.out_xy_idx);
+        self.out_xy = tf.add(out_xy,self.offset,name="out_xy");
+        
         out_xy_hard = tf.gather(self.out_hard,self.out_xy_idx);
         self.out_xy_hard = tf.add(out_xy_hard,self.offset,name="out_xy_hard");
         
@@ -76,66 +88,144 @@ class PPBase(object):
     def __get_opt__(self):
         self.lr  = tf.placeholder(tf.float32,name='lr');
         self.step = tf.get_variable(shape=[],initializer=tf.constant_initializer(0),trainable=False,name='step',dtype=tf.int32);
-        self.opt = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss,global_step=self.step);
+        #self.opt = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss,global_step=self.step);
+        self.opt = tf.train.AdamOptimizer(self.lr).minimize(self.loss,global_step=self.step);
         
 class PPAffine(PPBase):
     def __init__(self,dev):
         super(PPAffine,self).__init__(dev);
         
     def __get_deformed_box__(self):
-        affine_shape = [3,3];
-        affine_init  = tf.constant_initializer([1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]);
+        affine_shape = [3,4];
+        affine_init  = tf.constant_initializer([1.0,0.0,0.0,0.0,
+                                                0.0,1.0,0.0,0.0,
+                                                0.0,0.0,1.0,-0.5]);
         self.affine = tf.get_variable(shape=affine_shape,initializer=affine_init ,trainable=True,name='affine');
-        t_shape = [3,1];
-        t_init  = tf.constant_initializer([0.0,0.0,0.0]);
-        self.t = tf.get_variable(shape=t_shape,initializer=t_init ,trainable=True,name='t');
-        self.deformed_box = tf.matmul(self.affine,self.box);
-        self.deformed_box = tf.add(self.deformed_box,self.t,name="deformed_box");
+        self.extern_affine = tf.placeholder(tf.float32,shape=[3,4],name='extern_affine');
+        self.set_affine = tf.assign(self.affine,self.extern_affine);
+        homo_const = tf.constant([0,0,0,1],dtype=tf.float32,shape=[1,4],name="homo_const");
+        self.affine_mat = tf.concat([self.affine,homo_const],0);
+        homo_box = tf.concat([self.box,tf.ones(shape=[1,8])],0);
+        self.homo_deformed_box = tf.matmul(self.affine_mat,homo_box,name="homo_deformed_box");
         
-class PPWeight(PPAffine):
+#with weight        
+class PPW(PPAffine):
     def __init__(self,dev):
-        with tf.device( dev ):
-            self.__get_box__();
-            self.__get_deformed_box__();
-            self.__get_perspect_mat__();
-            self.__get_project__();
-            self.__get_interp__();
-            self.__get_loss__();
-            self.__get_opt__();
-      
-    def __get_interp__(self):
-        self.out_xy_t = tf.transpose(self.out_xy,[1,0]);
-        self.interp_v_idx = tf.constant([3,0,0,1,1,2,2,3,7,4,4,5,5,6,6,7,0,4,1,5,2,6,3,7],dtype=tf.int32,shape=[12,2]);
-        self.interp_v = tf.gather(self.out_xy_t,self.interp_v_idx,name="interp_v");
-        w_shape = [12,2,1];
-        w_init  = tf.constant_initializer(
-            [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,
-             0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5
-            ]);
-        self.interp_w = tf.square( tf.get_variable(shape=w_shape,initializer=w_init ,trainable=True,name='interp_w') );
-        self.out_interp = tf.transpose(tf.reduce_sum(self.interp_v*self.interp_w,axis=1),[1,0],name='out_interp');
+        super(PPW,self).__init__(dev);
         
     def __get_loss__(self):
+        self.w = tf.placeholder(tf.float32,shape=[1,8],name='w');
         self.gt_xy = tf.placeholder(tf.float32,shape=[2,8],name='gt_xy');
-        self.gt_xy_mask = tf.placeholder(tf.float32,shape=[8],name='gt_xy_mask');
-        self.xy_dist = tf.reduce_sum(tf.square(self.out_xy - self.gt_xy),axis=0,name="xy_dist");
-        self.masked_xy_dist = tf.xy_dist * tf.gt_xy_mask;
-        self.xy_loss = tf.reduce_mean(self.masked_xy_dist,name="xy_loss");
-        #
-        self.gt_interp = tf.placeholder(tf.float32,shape=[2,12],name='gt_interp');
-        self.gt_interp_mask = tf.placeholder(tf.float32,shape=[12],name='gt_interp_mask');
-        self.interp_dist = tf.reduce_sum(tf.square(self.out_interp - self.gt_interp),axis=0,name="interp_dist");
-        self.masked_interp_dist = tf.interp_dist * tf.gt_interp_mask;
-        self.interp_loss = tf.reduce_mean(self.masked_xy_dist,name="interp_loss");
-        self.gt_loss = self.xy_loss + self.interp_loss;
-        #div loss  
-        self.out_div_idx = tf.constant([3],dtype=tf.int32,shape=[1],name="out_div_idx");
-        self.out_div = tf.gather(self.out,self.out_div_idx,name="out_div");
-        self.div_loss = tf.reduce_mean(tf.square(self.out_div - 1.0),name="div_loss");
-        #interp loss
-        self.interp_loss = tf.reduce_mean( tf.square( tf.reduce_sum(self.interp_w,axis=1) - 1.0 ),name="interp_loss" );
-        self.loss = self.gt_loss + 100.0*self.div_loss + 100.0*self.interp_loss;
+        self.gt_dist = tf.reduce_sum(tf.square(self.out_xy - self.gt_xy),axis=0);
+        self.gt_loss = tf.reduce_mean(self.w*self.gt_dist,name="gt_loss");
+        self.out_norm_idx = tf.constant([3],dtype=tf.int32,shape=[1],name="out_norm_idx");
+        self.out_norm = tf.gather(self.out,self.out_norm_idx,name="out_norm");
+        self.norm_loss = tf.reduce_mean(tf.square(self.out_norm - 1.0),name="norm_loss");
+        self.loss = self.gt_loss + 100.0*self.norm_loss;
+        
+class PPV(PPW):
+    def __init__(self,dev):
+        super(PPV,self).__init__(dev);
+        
+    def __get_perspect_mat__(self):
+        self.fovAngle = np.pi / 2;
+        self.fovFar = 1000.0;
+        self.fovNear = 0.1;
+        self.fovAspect = 1.0;
+        self.cot = 1.0 / np.tan(self.fovAngle/2.0);
+        f = self.fovFar;
+        n = self.fovNear;
+        self.perspect_const = tf.constant([0.0,-1.0],dtype=tf.float32,shape=[2],name="perspect_const");
+        perspect_var_shape = [4];
+        perspect_var_init  = tf.constant_initializer([self.cot/self.fovAspect,self.cot,-(f+n)/(f-n),-2*f*n/(f-n)]);
+        self.perspect_var = tf.get_variable(shape=perspect_var_shape,initializer=perspect_var_init,trainable=True,name='perspect_var');
+        self.extern_perspect_var = tf.placeholder(tf.float32,shape=[4],name='extern_perspect_var');
+        self.set_perspect_var = tf.assign(self.perspect_var,self.extern_perspect_var);
+        perspect_val = tf.concat([self.perspect_const,self.perspect_var],0);
+        perspect_idx = tf.constant(
+                [2,0,0,0,
+                 0,3,0,0,
+                 0,0,4,5,
+                 0,0,1,0],dtype=tf.int32,shape=[4,4],name="perspect_idx");
+        self.perspect_mat = tf.gather(perspect_val,perspect_idx,name="perspect_mat");
+        
+class PPS(PPW):
+    def __init__(self,dev):
+        super(PPS,self).__init__(dev);
+        
+    def __get_viewport_map__(self):
+        offset_shape = [2,1];
+        offset_init  = tf.constant_initializer([0.0,0.0]);
+        self.offset = tf.get_variable(shape=offset_shape,initializer=offset_init ,trainable=True,name='offset');
+        self.extern_offset = tf.placeholder(tf.float32,shape=[2,1],name='extern_offset');
+        self.set_offset = tf.assign(self.offset,self.extern_offset);
+        
+        scale_shape = [2,1];
+        scale_init = tf.constant_initializer([1.0,1.0]);
+        self.scale = tf.get_variable(shape=scale_shape,initializer=scale_init ,trainable=True,name='scale');
+        self.extern_scale = tf.placeholder(tf.float32,shape=[2,1],name='extern_scale');
+        self.set_scale = tf.assign(self.scale,self.extern_scale);
+        
+        self.out_xy_idx = tf.constant([0,1],dtype=tf.int32,shape=[2],name="out_xy_idx");
+        
+        out_xy = tf.gather(self.out,self.out_xy_idx);
+        self.out_xy = tf.multiply(tf.add(out_xy,self.offset),self.scale,name="out_xy");
+        
+        out_xy_hard = tf.gather(self.out_hard,self.out_xy_idx);
+        self.out_xy_hard = tf.multiply(tf.add(out_xy_hard,self.offset),self.scale,name="out_xy_hard");
+        
+def NormCoordToImgCoord(viewSize,w,h,sw,sh,coord):
+    newcoord = coord.copy();
+    newcoord[:,1] *= -1.0;
+    newcoord += np.array([[float(sw/viewSize),float(sh/viewSize)]],dtype=np.float32);
+    newcoord /= 2.0;
+    newcoord *= np.array([[float(w/sw*viewSize),float(h/sh*viewSize)]],dtype=np.float32);
+    return newcoord;
 
+def areaFromL(a,b,c):
+    return 0.25*np.sqrt((a+b+c)*(a+b-c)*(a+c-b)*(b+c-a));
+
+def areaFromV(p0,p1,p2):
+    a = np.sqrt((np.square(p1-p0)).sum());
+    b = np.sqrt((np.square(p2-p1)).sum());
+    c = np.sqrt((np.square(p0-p2)).sum());
+    return areaFromL(a,b,c);
+
+def isInside(ABCD,M):
+    return;
+    
+    
+    
+
+def layout2Label(xyz,x,y):
+    bestL = -1;
+    bestZ = 1e9;
+    fidx = np.array(
+            [[4,5,6,7],
+             [0,4,7,3],
+             [1,5,4,0],
+             [2,6,5,1],
+             [3,7,6,2]],dtype=np.int32);
+    for i in range(5):
+        fxyz = xyz[fidx[i,:],:];        
+        if bestZ > z:
+            bestZ = z;
+            bestL = i;
+    return bestL;
+        
+def layout2Res(xyz,viewSize,img):
+    newxyz = xyz.copy();
+    xy = newxyz[:,0:2];
+    imgscaled = img.scaled(viewSize,viewSize,Qt.KeepAspectRatio);
+    w = img.width();
+    h = img.height();
+    sw = imgscaled.width();
+    sh = imgscaled.height();
+    newxyz[:,0:2] = NormCoordToImgCoord(viewSize,w,h,sw,sh,xy);
+    lbl = np.zeros([h,w],dtype=np.uint8);
+    for y in range(h):
+        for x in range(w):
+            lbl[y,x] = layout2Label(newxyz,x,y);
         
 def draw_box2D(size,xy,name=None):
     g1 = [0,1,2,3,0];
@@ -149,14 +239,13 @@ def draw_box2D(size,xy,name=None):
     plt.show();
 
 def printTensor(tensor,sess):
-    print tensor.name,":",sess.run(tensor);
+    print(tensor.name,":",sess.run(tensor));
     
 def run(ppl,gt):
     config=tf.ConfigProto();
     config.gpu_options.allow_growth = True;
     config.allow_soft_placement = True;
-    saver = tf.train.Saver();
-    lrate = 0.01;
+    lrate = 0.005;
     max_step = 2e5;
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer());
@@ -168,33 +257,32 @@ def run(ppl,gt):
             if step%(max_step//10)==0:
                 lrate *=0.5;
             if step%(max_step//5)==0:
-                print sess.run(ppl.loss,feed_dict={ppl.gt_xy:gt});
+                print(sess.run(ppl.loss,feed_dict={ppl.gt_xy:gt}));
                 #print sess.run(ppl.gt_dist,feed_dict={ppl.gt_xy:gt});
                 #printTensor(ppl.norm_factor,sess);
                 #printTensor(ppl.norm_loss,sess);
-                #printTensor(ppl.affine,sess);
+                printTensor(ppl.affine,sess);
                 #printTensor(ppl.scale,sess);
                 #printTensor(ppl.t,sess);
                 #printTensor(ppl.offset,sess);
                 #print sess.run(ppl.out_xy);
-        print "hard:"
+        print("hard:");
         draw_box2D([320,240],sess.run(ppl.out_xy_hard));
-        print "soft:"
+        print("soft:");
         draw_box2D([320,240],sess.run(ppl.out_xy));
     
 def test_run():
     gt = np.array([[ 1.8, 1.8,-1,-1, 1,1,-0.2,-0.2],[1, -1, -1, 1,0.4, -0.4, -0.4, 0.4]],dtype=np.float32);
     draw_box2D([320,240],gt);
     os.environ["CUDA_VISIBLE_DEVICES"] = "0";
-    #print "PPBase:"
-    #ppl = PPBase("/gpu:0")
-    print "PPAffine:"
+    print("PPAffine:");
     ppl = PPAffine("/gpu:0")
     run(ppl,gt);
     return;
 
 def gt_simulate():
     gt_lst = [];
+    gt_lst.append({'gt_xy':np.array([[1.5,1.5,-1.5,-1.5,0.5,0.5,-0.5,-0.5],[1.5,-1.5,-1.5,1.5,0.5,-0.5,-0.5,0.5]])});
     gt_lst.append({'gt_xy':np.array([[1,1,-1.2,-1.2,0.4,0.4,-0.7,-0.7],[1,-1,-1.2,1.2,0.6,-0.6,-0.8,0.8]],dtype=np.float32)});
     gt_lst.append({'gt_xy':np.array([[1.44,1,-1.4,-2.16,0.6,0.2,-0.4,-0.9],[1.5,-1,-1,1.5,1,-0.4,-0.4,1]],dtype=np.float32)});
     gt_lst.append({'gt_xy':np.array([[1,1.15,-1.15,-1,0.9,1,-1,-0.9],[1,-1.2,-1.2,1,0.9,-1,-1,0.9]],dtype=np.float32)});
@@ -211,18 +299,18 @@ def gt_simulate():
 
 def test_run2():
     os.environ["CUDA_VISIBLE_DEVICES"] = "0";
-    print "PPAffine:"
+    print("PPAffine:");
     ppl = PPAffine("/gpu:0");
     gt_lst = gt_simulate();
     cnt = 0;
     for gt in gt_lst:
-        print "%d/"%cnt,len(gt_lst);
+        if cnt >= 5:
+            break;
+        print("%d/"%cnt,len(gt_lst));
         draw_box2D([320,240],gt['gt_xy']);
         run(ppl,gt['gt_xy']);
-        if cnt > 1:
-            break;
         cnt+=1;
-        print "%d/"%cnt,len(gt_lst);
+        print("%d/"%cnt,len(gt_lst));
     return;
     
 def main():
