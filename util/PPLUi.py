@@ -1,9 +1,10 @@
 from PPL import PPW;
+from PPL import layout2ResultV2;
 import sys;
 import os;
 from PyQt5.QtCore import Qt,pyqtSignal,pyqtSlot;
 from PyQt5 import QtCore, QtGui, QtOpenGL,QtWidgets;
-from PyQt5.QtWidgets import QApplication,QFileDialog,QMainWindow,QMessageBox;
+from PyQt5.QtWidgets import QApplication,QFileDialog,QMainWindow,QMessageBox,QDialog;
 from PyQt5.uic import loadUi;
 from scipy.io import loadmat;
 from QImage2Array import convertQImageToArray;
@@ -11,6 +12,7 @@ from QImage2Array import convertArrayToQImage;
 import numpy as np;
 import tensorflow as tf;
 import h5py;
+from VDialog import VDialog;
 #This is thread for optimization
 class PPThread(QtCore.QThread):
     def __init__(self,parent):
@@ -91,6 +93,12 @@ class PPWork(QtCore.QObject):
         
     def getXY(self):
         return self.sess.run(self.ppl.out_xy_hard);
+    
+    def getXYZ(self):
+        XYZ1 = self.sess.run(self.ppl.out_hard);
+        offset = self.getOffset();
+        XYZ1[0:2,:] += offset;
+        return XYZ1[0:3,:];
     
     def getAffine(self):
         return self.sess.run(self.ppl.affine);
@@ -222,6 +230,7 @@ class PPLWidget(QMainWindow):
                 QtGui.qRgba(255,233,169,180),
                 QtGui.qRgba(240,145,146,180),
                 QtGui.qRgba(249,209,212,180),
+                QtGui.qRgba(223,181,183,180),
                 ]
         self.CTable = [
                 QtGui.qRgb(129,194,214),
@@ -251,9 +260,11 @@ class PPLWidget(QMainWindow):
         self.actionLast.triggered.connect(self.loadLast);
         self.actionNext.triggered.connect(self.loadNext);
         self.actionReset_Layout.triggered.connect(self.resetLayout);
+        self.actionDebug_Layout2Res.triggered.connect(self.layout2Res);
     
     def closeEvent(self,event):
-        self.saveCurrent();
+        if self.LSUNRoot is not None:
+            self.saveCurrent();
         super().closeEvent(event);
     
     def loaddataset(self,fname):
@@ -445,6 +456,30 @@ class PPLWidget(QMainWindow):
             
     @pyqtSlot()
     def layout2Res(self):
+        if self.LSUNRoot is None:
+            return;
+        dialog = VDialog();
+        imgpad = QtGui.QImage(self.imgscaled.width()*3+10,self.imgscaled.height(),QtGui.QImage.Format_RGB888);
+        imgpad.fill(Qt.white);
+        xyz = self.work.getXYZ();
+        vs = self.viewSize;
+        w = self.img.width();
+        h = self.img.height();
+        sw = self.imgscaled.width();
+        sh = self.imgscaled.height();
+        
+        msk = layout2ResultV2(xyz,vs,w,h,sw,sh);
+        mskimg = QtGui.QImage(msk,msk.shape[1],msk.shape[0],msk.shape[1],QtGui.QImage.Format_Indexed8);
+        mskimg.setColorTable(self.mskCTable);
+        
+        painter = QtGui.QPainter();
+        painter.begin(imgpad);
+        painter.drawImage(0,0,self.imgscaled);
+        painter.drawImage(self.imgscaled.width()+5,0,self.msk.scaled(self.viewSize,self.viewSize,Qt.KeepAspectRatio));
+        painter.drawImage(2*self.imgscaled.width()+10,0,mskimg.scaled(self.viewSize,self.viewSize,Qt.KeepAspectRatio));
+        painter.end();
+        dialog.setPixmap(QtGui.QPixmap.fromImage(imgpad));
+        dialog.exec_();
         return;
             
     @pyqtSlot()
@@ -525,6 +560,7 @@ class PPLWidget(QMainWindow):
         for item in self.targetItems:
             self.thread.timer.timeout.connect(item.updateLine);
         self.thread.timer.timeout.connect(self.showLoss);
+        
         
     def keyPressEvent(self, event):
         if not type(event) == QtGui.QKeyEvent:

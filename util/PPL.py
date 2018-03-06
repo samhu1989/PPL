@@ -6,6 +6,8 @@ import numpy as np;
 import matplotlib.pyplot as plt;
 import os;
 from PyQt5.QtCore import Qt,pyqtSignal,pyqtSlot;
+from InterpZ import fillZ;
+np.set_printoptions(threshold=np.inf); 
 
 class PPBase(object):
     def __init__(self,dev):
@@ -88,7 +90,6 @@ class PPBase(object):
     def __get_opt__(self):
         self.lr  = tf.placeholder(tf.float32,name='lr');
         self.step = tf.get_variable(shape=[],initializer=tf.constant_initializer(0),trainable=False,name='step',dtype=tf.int32);
-        #self.opt = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss,global_step=self.step);
         self.opt = tf.train.AdamOptimizer(self.lr).minimize(self.loss,global_step=self.step);
         
 class PPAffine(PPBase):
@@ -177,29 +178,14 @@ class PPS(PPW):
 def NormCoordToImgCoord(viewSize,w,h,sw,sh,coord):
     newcoord = coord.copy();
     newcoord[:,1] *= -1.0;
-    newcoord += np.array([[float(sw/viewSize),float(sh/viewSize)]],dtype=np.float32);
+    newcoord += np.array([[float(sw)/float(viewSize),float(sh)/float(viewSize)]],dtype=np.float32);
     newcoord /= 2.0;
-    newcoord *= np.array([[float(w/sw*viewSize),float(h/sh*viewSize)]],dtype=np.float32);
+    newcoord *= np.array([[float(w)/float(sw)*float(viewSize),float(h)/float(sh)*float(viewSize)]],dtype=np.float32);
     return newcoord;
 
-def areaFromL(a,b,c):
-    return 0.25*np.sqrt((a+b+c)*(a+b-c)*(a+c-b)*(b+c-a));
-
-def areaFromV(p0,p1,p2):
-    a = np.sqrt((np.square(p1-p0)).sum());
-    b = np.sqrt((np.square(p2-p1)).sum());
-    c = np.sqrt((np.square(p0-p2)).sum());
-    return areaFromL(a,b,c);
-
-def isInside(ABCD,M):
-    return;
-    
-    
-    
-
 def layout2Label(xyz,x,y):
-    bestL = -1;
-    bestZ = 1e9;
+    bestL = 6;
+    bestZ = 0.0;
     fidx = np.array(
             [[4,5,6,7],
              [0,4,7,3],
@@ -207,25 +193,46 @@ def layout2Label(xyz,x,y):
              [2,6,5,1],
              [3,7,6,2]],dtype=np.int32);
     for i in range(5):
-        fxyz = xyz[fidx[i,:],:];        
-        if bestZ > z:
-            bestZ = z;
+        fxyz = xyz[fidx[i,:],:];
+        z = interpZ(fxyz,x,y);
+        if z is None:
+            continue;
+        elif bestZ < abs(z):
+            bestZ = abs(z);
             bestL = i;
     return bestL;
         
-def layout2Res(xyz,viewSize,img):
-    newxyz = xyz.copy();
+def layout2Result(xyz,viewSize,w,h,sw,sh):
+    newxyz = np.transpose(xyz,[1,0]);
     xy = newxyz[:,0:2];
-    imgscaled = img.scaled(viewSize,viewSize,Qt.KeepAspectRatio);
-    w = img.width();
-    h = img.height();
-    sw = imgscaled.width();
-    sh = imgscaled.height();
     newxyz[:,0:2] = NormCoordToImgCoord(viewSize,w,h,sw,sh,xy);
+    #draw_box2D([0,0],np.transpose(newxy,[1,0]));
     lbl = np.zeros([h,w],dtype=np.uint8);
     for y in range(h):
         for x in range(w):
             lbl[y,x] = layout2Label(newxyz,x,y);
+            print(x,y,lbl[y,x]);
+    return lbl;
+
+
+
+def layout2ResultV2(xyz,viewSize,w,h,sw,sh):
+    newxyz = np.transpose(xyz,[1,0]);
+    xy = newxyz[:,0:2];
+    newxyz[:,0:2] = NormCoordToImgCoord(viewSize,w,h,sw,sh,xy);
+    depth = np.zeros([5,h,w],dtype=np.float32);
+    fidx = np.array(
+    [[4,5,6,7],
+     [0,4,7,3],
+     [1,5,4,0],
+     [2,6,5,1],
+     [3,7,6,2]],dtype=np.int32);
+    for i in range(5):
+        fxyz = newxyz[fidx[i,:],:];
+        fillZ(depth,i,fxyz,h,w);
+    lbl = np.argmax(depth,axis=0).astype(np.uint8);
+    lbl += 1;
+    return lbl;
         
 def draw_box2D(size,xy,name=None):
     g1 = [0,1,2,3,0];
@@ -312,6 +319,24 @@ def test_run2():
         cnt+=1;
         print("%d/"%cnt,len(gt_lst));
     return;
+
+def test_run3():
+    xyz = np.array([
+            [1.57680583,1.55983639,0.27274239,0.18070483,
+             0.29976809,0.33875382,-0.7918008,-0.90323424],
+            [1.73015022,-0.68355012,-1.9152863,1.61002922,
+             1.23483264,-0.42490289,-1.10251248,1.01625967],
+            [0.72685117,0.74247676,0.62270993,0.58821535,
+             0.8134501,0.82087797,0.77007711,0.75769943]
+            ],dtype=np.float32);
+    viewSize = 256;
+    w = 1200; 
+    h = 1600; 
+    sw = 192; 
+    sh = 256;
+    layout2Result(xyz,viewSize,w,h,sw,sh);
+    return;
+    
     
 def main():
     test_run2();

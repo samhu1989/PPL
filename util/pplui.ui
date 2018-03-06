@@ -49,6 +49,7 @@
     <property name="title">
      <string>Debug</string>
     </property>
+    <addaction name="actionDebug_Layout2Res"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuEdit"/>
@@ -104,6 +105,14 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
+   </property>
+  </action>
+  <action name="actionDebug_Layout2Res">
+   <property name="text">
+    <string>Debug Layout2Res</string>
+   </property>
+   <property name="shortcut">
+    <string>V</string>
    </property>
   </action>
  </widget>
