@@ -6,7 +6,7 @@ import os;
 util_path = os.path.dirname(__file__)+os.sep+".."+os.sep+"util";
 sys.path.append(util_path);
 from PPNet import PPNet;
-from PPL import layout2ResultV2;
+from PPL import layout2ResultV3;
 from PPL import pixAcc;
 from data import Data;
 from PyQt5 import QtCore, QtGui;
@@ -46,7 +46,7 @@ def valid(valid_data,sess,ppnet,net):
     h = vdata["whswsh"][0,1];
     sw = vdata["whswsh"][0,2];
     sh = vdata["whswsh"][0,3];
-    lbl = layout2ResultV2(xyz,256,w,h,sw,sh);
+    lbl = layout2ResultV3(xyz,256,w,h,sw,sh);
     gt_lbl = vdata["gt_lbl"][0];
     valid_loss = 0.5*( pixAcc(gt_lbl,lbl) + pixAcc(lbl,gt_lbl) );
     save_valid(vdata["tag"][0],vdata["origin_img"][0],gt_lbl,lbl)

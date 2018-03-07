@@ -3,6 +3,7 @@ from __future__ import division;
 import numpy as np;
 import sys;
 import math;
+import scipy as sp;
 
 def fequal(a,b,th=1e-2):
     return abs(a-b) < th;
@@ -94,6 +95,24 @@ def areaFromV(A,B,x,y):
 def areaFromV(A,B,x,y):
     return np.abs((A[0] * B[1] + B[0] * y + x * A[1] - B[0] * y - x * B[1] - A[0] * y) / 2.0);
 """
+def orderZ(fxy):
+    zorder = np.zeros([8],np.float32);
+    hull = sp.spatial.qhull.Delaunay(fxy).convex_hull;
+    hullidx =  np.sort(np.unique(hull));
+    zorder[hullidx] = np.array([ x for x in range(0,len(hullidx)) ],dtype=np.float32);
+    c = np.mean(fxy[hullidx,:]);
+    inidx = []; 
+    for i in range(8):
+        if i not in hullidx:
+            inidx.append(i);
+    dists = np.square(fxy[inidx,:] - c).sum(axis=1);
+    inidx_order = np.argsort(dists);
+    order = 7;
+    for i in inidx_order:
+        zorder[inidx[i]] = float(order);
+        order -= 1;
+    return zorder;
+
 def fillZ(depth,i,fxyz,h,w):
     fz = fxyz[:,2];
     fxy = fxyz[:,0:2];

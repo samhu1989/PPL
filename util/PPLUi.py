@@ -1,5 +1,6 @@
 from PPL import PPW;
 from PPL import layout2ResultV2;
+from PPL import layout2ResultV3;
 import sys;
 import os;
 from PyQt5.QtCore import Qt,pyqtSignal,pyqtSlot;
@@ -468,7 +469,7 @@ class PPLWidget(QMainWindow):
         sw = self.imgscaled.width();
         sh = self.imgscaled.height();
         
-        msk = layout2ResultV2(xyz,vs,w,h,sw,sh);
+        msk = layout2ResultV3(xyz,vs,w,h,sw,sh);
         mskimg = QtGui.QImage(msk,msk.shape[1],msk.shape[0],msk.shape[1],QtGui.QImage.Format_Indexed8);
         mskimg.setColorTable(self.mskCTable);
         

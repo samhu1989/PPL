@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt;
 import os;
 from PyQt5.QtCore import Qt,pyqtSignal,pyqtSlot;
 from InterpZ import fillZ;
+from InterpZ import orderZ;
 np.set_printoptions(threshold=np.inf); 
 
 class PPBase(object):
@@ -251,6 +252,27 @@ def layout2ResultV2(xyz,viewSize,w,h,sw,sh):
     lbl = np.argmax(depth,axis=0).astype(np.uint8);
     lbl += 1;
     return lbl;
+
+def layout2ResultV3(xyz,viewSize,w,h,sw,sh):
+    newxyz = np.transpose(xyz,[1,0]);
+    xy = newxyz[:,0:2];
+    newxyz[:,0:2] = NormCoordToImgCoord(viewSize,w,h,sw,sh,xy);
+    # the predicted Z is ignored, Z order is determined using convexhull 
+    newxyz[:,2] = orderZ(newxyz[:,0:2]);
+    depth = np.zeros([5,h,w],dtype=np.float32);
+    fidx = np.array(
+    [[4,5,6,7],
+     [0,4,7,3],
+     [1,5,4,0],
+     [2,6,5,1],
+     [3,7,6,2]],dtype=np.int32);
+    for i in range(5):
+        fxyz = newxyz[fidx[i,:],:];
+        fillZ(depth,i,fxyz,h,w);
+    lbl = np.argmax(depth,axis=0).astype(np.uint8);
+    lbl += 1;
+    return lbl;
+    
         
 def draw_box2D(size,xy,name=None):
     g1 = [0,1,2,3,0];
