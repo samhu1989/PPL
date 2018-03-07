@@ -214,7 +214,25 @@ def layout2Result(xyz,viewSize,w,h,sw,sh):
             print(x,y,lbl[y,x]);
     return lbl;
 
-
+def pixAcc(gt,res):
+    assert gt.shape==res.shape;
+    assert gt.dtype==np.uint8;
+    assert res.dtype==np.uint8;
+    bestmatch = {};
+    bestmatch_cnt = {};
+    mapped_gt = gt.copy();
+    for l in range(gt.min(),gt.max()+1):
+        bestmatch_cnt[l] = 0;
+        bestmatch[l] = 1;
+        for i in range(res.min(),res.max()+1):
+            cnt = np.sum( (gt==l) & (res==i) );
+            if cnt > bestmatch_cnt[l]:
+                bestmatch_cnt[l] = cnt;
+                bestmatch[l] = i;
+        mapped_gt[gt==l] = bestmatch[l];
+    print(bestmatch);
+    err = float(np.sum(mapped_gt != res))/float(res.shape[0]*res.shape[1]);
+    return err;
 
 def layout2ResultV2(xyz,viewSize,w,h,sw,sh):
     newxyz = np.transpose(xyz,[1,0]);
@@ -336,10 +354,24 @@ def test_run3():
     sh = 256;
     layout2Result(xyz,viewSize,w,h,sw,sh);
     return;
+
+def test_run4():
+    gt = np.array([[1,2,3],[4,5,2],[2,2,3]],dtype=np.uint8);
+    res1 = np.array([[1,2,3],[4,5,2],[2,2,3]],dtype=np.uint8);
+    res2 = np.array([[2,2,3],[4,1,2],[2,2,5]],dtype=np.uint8);
+    res3 = res1.copy();
+    res3[res1==1]=2;
+    res3[res1==2]=3;
+    res3[res1==3]=4;
+    res3[res1==4]=5;
+    res3[res1==5]=1;
+    print(res1);
+    print(res3);
+    print(pixAcc(gt,res1),pixAcc(gt,res2),pixAcc(gt,res3));
     
     
 def main():
-    test_run2();
+    test_run4();
     
     
 if __name__=="__main__":

@@ -13,6 +13,7 @@ class PPNet(PPAffine):
             self.__get_viewport_map__();
             self.__get_loss__();
             self.__get_opt__();
+            self.__get_sum__();
             
     def __prepare_param__(self,param):
         param = tf.reshape(param,[-1,22]);
@@ -23,8 +24,8 @@ class PPNet(PPAffine):
         self.offset = tf.gather(param,offset_idx,axis=1,name="offset");
         norm_factor_idx = tf.constant([14,15,16,17,18,19,20,21],dtype=tf.int32,shape=[1,8]);
         self.norm_factor = tf.gather(param,norm_factor_idx,axis=1,name="norm_factor")
-        homo_const = tf.placeholder(tf.float32,shape=[None,1,4],name='homo_const');
-        self.affine_mat = tf.concat([self.affine,homo_const],axis=1,name="affine_mat");
+        self.homo_const = tf.placeholder(tf.float32,shape=[None,1,4],name='homo_const');
+        self.affine_mat = tf.concat([self.affine,self.homo_const],axis=1,name="affine_mat");
     
     def get_homo_const(self,batch_size):
         const = np.zeros(shape=[batch_size,1,4],dtype=np.float32);
@@ -88,13 +89,14 @@ class PPNet(PPAffine):
         return np.zeros(shape=[batch_size,2,1],dtype=np.float32);
         
     def __get_loss__(self):
-        self.gt_xy = tf.placeholder(tf.float32,shape=[2,8],name='gt_xy');
+        self.gt_xy = tf.placeholder(tf.float32,shape=[None,2,8],name='gt_xy');
         self.gt_dist = tf.reduce_sum(tf.square(self.out_xy - self.gt_xy),axis=1);
         self.gt_loss = tf.reduce_mean(self.gt_dist,name="gt_loss");
         self.out_norm_idx = tf.constant([3],dtype=tf.int32,shape=[1],name="out_norm_idx");
         self.out_norm = tf.gather(self.out,self.out_norm_idx,name="out_norm",axis=1);
         self.norm_loss = tf.reduce_mean(tf.square(self.out_norm - 1.0),name="norm_loss");
-        self.loss = self.gt_loss + 100.0*self.norm_loss;
+        self.reg_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))*0.1;
+        self.loss = self.gt_loss + self.reg_loss + 100.0*self.norm_loss ;
         #
         self.gt_affine = tf.placeholder(tf.float32,shape=[None,3,4],name="gt_affine");
         self.gt_offset = tf.placeholder(tf.float32,shape=[None,2,1],name="gt_offset");
@@ -107,6 +109,15 @@ class PPNet(PPAffine):
         self.step = tf.get_variable(shape=[],initializer=tf.constant_initializer(0),trainable=False,name='step',dtype=tf.int32);
         self.opt = tf.train.AdamOptimizer(self.lr).minimize(self.loss,global_step=self.step);
         self.pre_opt = tf.train.AdamOptimizer(self.lr).minimize(self.pre_loss,global_step=self.step);
+        
+    def __get_sum__(self):
+        sums = [];
+        sums.append(tf.summary.scalar("gt_loss",self.gt_loss));
+        sums.append(tf.summary.scalar("norm_loss",self.norm_loss));
+        sums.append(tf.summary.scalar("reg_loss",self.reg_loss));
+        sums.append(tf.summary.scalar("loss",self.loss));
+        sums.append(tf.summary.scalar("preloss",self.pre_loss));
+        self.sum_op = tf.summary.merge(sums);
 
 if __name__=="__main__":
     with tf.device("/cpu:0"):
