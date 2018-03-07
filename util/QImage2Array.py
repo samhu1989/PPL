@@ -24,3 +24,16 @@ def convertArrayToQImage(array):
     array = array.astype(np.uint8);
     img = QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1]*array.shape[2],QtGui.QImage.Format_RGB888);
     return img;
+
+mskCTable = [   QtGui.qRgba(216,34,13,180),
+                QtGui.qRgba(191,221,163,180),
+                QtGui.qRgba(255,233,169,180),
+                QtGui.qRgba(240,145,146,180),
+                QtGui.qRgba(249,209,212,180),
+                QtGui.qRgba(223,181,183,180),
+                ];
+
+def convertLabelToQImage(lbl):
+    msk = QtGui.QImage(lbl,lbl.shape[1],lbl.shape[0],lbl.shape[1],QtGui.QImage.Format_Indexed8);
+    msk.setColorTable(mskCTable);
+    return msk;

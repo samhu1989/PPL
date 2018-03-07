@@ -47,16 +47,24 @@ class Data(threading.Thread):
     def load(self):
         d = {};
         imgs = np.zeros(self.sizes,dtype=np.float32);
+        origin_imgs = [];
         whswsh = np.zeros([self.sizes[0],4],dtype=np.int32);
         gt_lbl = [];
         tags = [];
-        for i in range(self.sizes[0]):
+        i = 0;
+        while i < self.sizes[0]:
             current_name = self.datafile[self.fname][0,self.nameidx][0][0];
             img = QtGui.QImage(self.fpath+os.sep+"image"+os.sep+"images"+os.sep+current_name+'.jpg');
-            assert not img.isNull();
-            lbl = loadmat(self.fpath+'/layout/layout_seg/'+current_name+'.mat')['layout'].copy();
-            assert lbl.shape[0] == img.height();
-            assert lbl.shape[1] == img.width();
+            if img.isNull():
+                self.next_idx();
+                continue;
+            try:
+                lbl = loadmat(self.fpath+'/layout/layout_seg/'+current_name+'.mat')['layout'].copy();
+                assert lbl.shape[0] == img.height();
+                assert lbl.shape[1] == img.width();
+            except:
+                self.next_idx();
+                continue;
             imgscaled = img.scaled(self.sizes[2],self.sizes[1],Qt.KeepAspectRatio);
             imgpad = QtGui.QImage(self.sizes[2],self.sizes[1],QtGui.QImage.Format_RGB888);
             imgpad.fill(Qt.black);
@@ -67,11 +75,12 @@ class Data(threading.Thread):
             imgs[i,...] =  convertQImageToArray(imgpad);
             whswsh[i,...] = np.array([img.width(),img.height(),imgscaled.width(),imgscaled.height()],dtype=np.int32);
             tags.append(current_name);
+            origin_imgs.append(img);
             gt_lbl.append(lbl);
-            self.nameidx += 1;
-            if self.nameidx >= self.namenum:
-                self.nameidx = 0;
+            self.next_idx();
+            i += 1;
         d["img"] = imgs;
+        d["origin_img"] = origin_imgs;
         d["gt_lbl"] = gt_lbl;
         d["whswsh"] = whswsh;
         d["tag"] = tags;

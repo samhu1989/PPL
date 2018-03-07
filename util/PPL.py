@@ -211,7 +211,7 @@ def layout2Result(xyz,viewSize,w,h,sw,sh):
     for y in range(h):
         for x in range(w):
             lbl[y,x] = layout2Label(newxyz,x,y);
-            print(x,y,lbl[y,x]);
+            #print(x,y,lbl[y,x]);
     return lbl;
 
 def pixAcc(gt,res):
@@ -230,7 +230,7 @@ def pixAcc(gt,res):
                 bestmatch_cnt[l] = cnt;
                 bestmatch[l] = i;
         mapped_gt[gt==l] = bestmatch[l];
-    print(bestmatch);
+    #print(bestmatch);
     err = float(np.sum(mapped_gt != res))/float(res.shape[0]*res.shape[1]);
     return err;
 

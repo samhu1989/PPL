@@ -98,7 +98,7 @@ def fillZ(depth,i,fxyz,h,w):
     fz = fxyz[:,2];
     fxy = fxyz[:,0:2];
     y,x = np.mgrid[0:h,0:w];
-    print(depth.shape);
+    #print(depth.shape);
     A = fxy[0,:];
     B = fxy[1,:];
     C = fxy[2,:];

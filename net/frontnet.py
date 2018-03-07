@@ -8,7 +8,7 @@ def PlainCNN(dev,sizes):
     batch_size = sizes[0];
     h = sizes[1];
     w = sizes[2];
-    img = tf.placeholder(dtype=tf.float32,shape=[batch_size,h,w,3],name="img");
+    img = tf.placeholder(dtype=tf.float32,shape=[None,h,w,3],name="img");
     net["img"] = img;
     x = tfl.layers.conv.conv_2d(img,16,(7,7),strides=1,activation='relu',weight_decay=1e-5,regularizer='L1');
     net["conv00"] = x;

@@ -81,11 +81,11 @@ class PPNet(PPAffine):
         self.offset_ext = tf.concat([self.offset,self.ext_const],axis=1,name="offset_ext");
         self.out_with_offset = tf.add(self.out,self.offset_ext,name="out_with_offset");
         self.out_xy_idx = tf.constant([0,1],dtype=tf.int32,shape=[2],name="out_xy_idx");
-        self.out_xy = tf.gather(self.out,self.out_xy_idx,axis=1,name="out_xy");
+        self.out_xy = tf.gather(self.out_with_offset,self.out_xy_idx,axis=1,name="out_xy");
         self.out_hard_with_offset = tf.add(self.out_hard,self.offset_ext,name="out_hard_with_offset");
-        self.out_xy_hard = tf.gather(self.out_hard,self.out_xy_idx,axis=1,name="out_xy_hard");
+        self.out_xy_hard = tf.gather(self.out_hard_with_offset,self.out_xy_idx,axis=1,name="out_xy_hard");
         
-    def ext_const(self,batch_size):
+    def get_ext_const(self,batch_size):
         return np.zeros(shape=[batch_size,2,1],dtype=np.float32);
         
     def __get_loss__(self):
