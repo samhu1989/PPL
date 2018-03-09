@@ -302,7 +302,7 @@ class PPLWidget(QMainWindow):
     def loadNext(self):
         if self.LSUNRoot is None:
             return;
-        if self.index < (self.train_num + self.valid_num - 1):
+        if self.index < self.train_num:
             self.saveCurrent();
             self.index += 1;
             self.loadCurrent();
@@ -320,7 +320,8 @@ class PPLWidget(QMainWindow):
         if self.index < self.train_num:
             self.current_name = self.dataset['training']['training'][0,self.index][0][0];
         else:
-            self.current_name = self.dataset['validation']['validation'][0,self.index-self.train_num][0][0];
+            self.index = 0;
+            self.current_name = self.dataset['training']['training'][0,self.index][0][0];
         self.loadPixmap();
         self.loadMask();           
         w = self.img.width();

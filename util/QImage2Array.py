@@ -37,3 +37,20 @@ def convertLabelToQImage(lbl):
     msk = QtGui.QImage(lbl,lbl.shape[1],lbl.shape[0],lbl.shape[1],QtGui.QImage.Format_Indexed8);
     msk.setColorTable(mskCTable);
     return msk;
+
+def convertQImageToLabel(img):
+    assert img.format() == QtGui.QImage.Format_Indexed8;
+    img = img.convertToFormat(QtGui.QImage.Format_Grayscale8);
+    w = img.width();
+    h = img.height();
+    s = 2**np.ceil(np.log2(max(w,h)));
+    imgpad = QtGui.QImage(s,s,QtGui.QImage.Format_Grayscale8);
+    painter = QtGui.QPainter();
+    painter.begin(imgpad);
+    painter.drawImage(0,0,img);
+    painter.end();
+    ptr = imgpad.bits();
+    assert imgpad.byteCount() == (imgpad.width()*imgpad.height());
+    ptr.setsize(imgpad.byteCount());
+    lbl = np.array(ptr,dtype=np.uint8).reshape(imgpad.height(),imgpad.width());
+    return lbl[0:h,0:w];
