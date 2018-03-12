@@ -50,6 +50,7 @@ class PPWork(QtCore.QObject):
         self.gt = np.array([[1.2,1.3,-1.3,-1.1,1.0,1.1,-1.1,-1],[1.25,-1.0,-1.3,1.4,1.0,-0.7,-0.9,1.15]],dtype=np.float32);
         self.w  = np.array([[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0]],dtype=np.float32);
         self.loss_value = self.sess.run(self.ppl.loss,feed_dict={self.ppl.w:self.w,self.ppl.gt_xy:self.gt});
+        self.iter = 0;
         
     def reset(self,affine=None,offset=None,scale=None):
         if affine is None:
@@ -119,13 +120,14 @@ class PPWork(QtCore.QObject):
     def optimize(self):
         for i in range(100):
             _,self.loss_value= self.sess.run([self.ppl.opt,self.ppl.loss],feed_dict={self.ppl.w:self.w,self.ppl.gt_xy:self.gt,self.ppl.lr:self.lrate});
+        self.iter += 1;
 
 class PPTargetItem(QtWidgets.QGraphicsEllipseItem):
     def __init__(self,source):
         super().__init__();
         assert isinstance(source,QtWidgets.QGraphicsEllipseItem),"Invalid Source Item"
         self.source = source;
-        self.setRect(-6, -6, 12, 12);
+        self.setRect(-8, -8, 16, 16);
         self.setZValue(3.0);
         pen = self.pen();
         pen.setWidth(2);
@@ -143,7 +145,10 @@ class PPTargetItem(QtWidgets.QGraphicsEllipseItem):
         self.corners = [];
         self.cp0 = None;
         self.cp1 = None;
+        self.cp0idx = None;
+        self.cp1idx = None;
         self.withinline = False;
+        self.corneridx = None;
             
     def initLine(self):
         self.line = QtWidgets.QGraphicsLineItem(self);
@@ -161,14 +166,22 @@ class PPTargetItem(QtWidgets.QGraphicsEllipseItem):
         p0p = self.scenePos() - self.cp0;
         p0p1 = self.cp1 - self.cp0;
         p0p1_norm = p0p1.x()*p0p1.x()+p0p1.y()*p0p1.y();
+        #p0p_len = np.sqrt(p0p.x()*p0p.x()+p0p.y()*p0p.y());
+        #p0p1_len = np.sqrt(p0p1_norm);
+        ratio = 1.00001;
         s = QtCore.QPointF.dotProduct(p0p,p0p1);
-        p = s*p0p1/p0p1_norm + self.cp0;
+        p = s*ratio*p0p1/p0p1_norm + self.cp0;
         self.setPos(p);
         self.updateLine();
         
     def setLineConstraint(self,p0,p1):
-        self.cp0 = p0;
-        self.cp1 = p1;
+        self.cp0 = p0.scenePos();
+        self.cp1 = p1.scenePos();
+        for idx,item in enumerate(self.corners):
+            if item is p0:
+                self.cp0idx = idx;
+            if item is p1:
+                self.cp1idx = idx;
         self.withinline = True;
         self.enforceLineConstraint();
         
@@ -184,12 +197,44 @@ class PPTargetItem(QtWidgets.QGraphicsEllipseItem):
     def getLine(self):
         return self.line;
     
+    def updateConstraint(self):
+        self.updateCornerConstraint();
+        self.updateLineConstraint();
+        return;
+    
+    def updateCornerConstraint(self):
+        if self.corneridx is not None:
+            maxidx = len(self.corners);
+            item = self.corners[self.corneridx%maxidx];
+            print("update to",item.scenePos());
+            self.setPos(item.scenePos());
+            self.updateLine();
+        return;
+    
+    def updateLineConstraint(self):
+        if not self.withinline:
+            return;
+        if (self.cp0idx is not None) and  (self.cp1idx is not None):
+            maxidx = len(self.corners);
+            self.cp0 = self.corners[self.cp0idx%maxidx].scenePos();
+            self.cp1 = self.corners[self.cp1idx%maxidx].scenePos();
+            self.enforceLineConstraint();
+        return;
+    
     def mouseReleaseEvent(self,event):
+        idx = 0;
+        matched = False
         for item in self.corners:
-            fixPos = item.mapFromScene(event.scenePos());
-            if item.contains(fixPos):
+            fixPos = self.mapFromScene(item.scenePos());
+            if self.contains(fixPos):
                 self.setPos(item.scenePos());
                 self.updateLine();
+                self.corneridx = idx;
+                matched = True;
+            idx += 1;
+        if not matched:
+            self.corneridx = None;
+                
         if self.withinline:
             self.enforceLineConstraint();
         super().mouseReleaseEvent(event);
@@ -262,6 +307,8 @@ class PPLWidget(QMainWindow):
         self.actionNext.triggered.connect(self.loadNext);
         self.actionReset_Layout.triggered.connect(self.resetLayout);
         self.actionDebug_Layout2Res.triggered.connect(self.layout2Res);
+        self.actionReload.triggered.connect(self.reload);
+        self.actionAutoRun.triggered.connect(self.autoRun);
     
     def closeEvent(self,event):
         if self.LSUNRoot is not None:
@@ -276,7 +323,7 @@ class PPLWidget(QMainWindow):
             QMessageBox.warning(
                     self,
                     "Missing File",  
-                    "Failed to open "+self.LSUNRoot + "/" + fname +",Please check the dataset",
+                    "Failed to open "+self.LSUNRoot + "/" + fname + ",Please check the dataset",
                     QMessageBox.Ok
                     );
                                 
@@ -290,6 +337,36 @@ class PPLWidget(QMainWindow):
         self.train_num = self.dataset['training']['training'].size;
         self.valid_num = self.dataset['validation']['validation'].size;
         self.loadCurrent();
+        
+    @pyqtSlot()    
+    def reload(self):
+        fname = QFileDialog.getOpenFileName(self,'Open mat','E:/WorkSpace/');
+        try:
+            self.dataset['training'] = loadmat(str(fname[0]));
+        except:
+            QMessageBox.warning(
+                    self,
+                    "Missing File",  
+                    "Failed to open "+str(fname[0]) +",Please check the dataset",
+                    QMessageBox.Ok
+                    );
+        self.index = 0;
+        self.train_num = self.dataset['training']['training'].size;
+        self.loadCurrent();
+        
+    @pyqtSlot()
+    def autoRun(self):
+        while self.index < self.train_num - 1:
+            self.loadNext();
+            self.work.iter = 0;
+            self.thread.start();
+            last_loss = self.work.loss_value;
+            while self.work.loss_value < last_loss or self.work.iter < 300:
+                last_loss = self.work.loss_value;
+                self.statusbar.showMessage("%d/%d:%d-%f"%(self.index,self.train_num,self.work.iter,self.work.loss_value));
+                QApplication.processEvents();
+            self.thread.quit();
+            self.thread.wait();
         
     @pyqtSlot()
     def resetLayout(self):
@@ -319,6 +396,7 @@ class PPLWidget(QMainWindow):
     def loadCurrent(self):
         if self.index < self.train_num:
             self.current_name = self.dataset['training']['training'][0,self.index][0][0];
+            #print(self.dataset['training']['training'][0,self.index][2][0][0]);
         else:
             self.index = 0;
             self.current_name = self.dataset['training']['training'][0,self.index][0][0];
@@ -333,9 +411,11 @@ class PPLWidget(QMainWindow):
         else:
             self.current_corners = self.ImgCoordToNormCoord(w,h,sw,sh,self.dataset['validation']['validation'][0,self.index-self.train_num][3][:]);
         self.loadCorners();
+        #print("===")
         for item in self.targetItems:
+            #print(item.corneridx)
             item.setCorners(self.cornerItems);
-            item.unsetLineConstraint();
+            item.updateConstraint();
         self.loadExist();
             
     def loadExist(self):
@@ -394,6 +474,10 @@ class PPLWidget(QMainWindow):
         self.mskItem.setPos(-self.mskItem.pixmap().width()/2.0,-self.mskItem.pixmap().height()/2.0);
         
     def ImgCoordToNormCoord(self,w,h,sw,sh,coord):
+        assert w != 0 ;
+        assert h != 0 ;
+        assert sw != 0;
+        assert sh != 0;
         newcoord = coord / np.array([[float(w/sw*self.viewSize),float(h/sh*self.viewSize)]],dtype=np.float32);
         newcoord *= 2.0;
         newcoord -= np.array([[float(sw/self.viewSize),float(sh/self.viewSize)]],dtype=np.float32);
@@ -584,7 +668,7 @@ class PPLWidget(QMainWindow):
                         citemcnt += 1;
                         citem.append(item);
                 if titemcnt == 1 and citemcnt == 2:
-                    titem.setLineConstraint(citem[0].scenePos(),citem[1].scenePos());
+                    titem.setLineConstraint(citem[0],citem[1]);
             elif len(items)==1:
                 if items[0] in self.targetItems:
                     items[0].unsetLineConstraint();
@@ -603,8 +687,10 @@ class PPLWidget(QMainWindow):
             items = self.graphicsScene.selectedItems();
             if len(items)==1:
                 if items[0] in self.targetItems:
-                    if items[0].w >= 0.005:
+                    if items[0].w >= 0.000:
                         items[0].w -= 0.005;
+                    if items[0].w < 0.0001:
+                        items[0].w = 0.0001;
                     items[0].setToolTip("%f"%items[0].w);
                     pos = self.graphicsView.mapFromScene(items[0].scenePos());
                     pos = self.graphicsView.mapToParent(pos);

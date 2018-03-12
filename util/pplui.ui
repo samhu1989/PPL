@@ -34,6 +34,7 @@
      <string>File</string>
     </property>
     <addaction name="actionSet_LSUN_Root"/>
+    <addaction name="actionReload"/>
     <addaction name="actionLast"/>
     <addaction name="actionNext"/>
    </widget>
@@ -44,6 +45,7 @@
     <addaction name="actionReset_Layout"/>
     <addaction name="actionDouble_Learning_Rate"/>
     <addaction name="actionHalf_Learning_Rate"/>
+    <addaction name="actionAutoRun"/>
    </widget>
    <widget class="QMenu" name="menuDebug">
     <property name="title">
@@ -113,6 +115,22 @@
    </property>
    <property name="shortcut">
     <string>V</string>
+   </property>
+  </action>
+  <action name="actionReload">
+   <property name="text">
+    <string>Reload</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+L</string>
+   </property>
+  </action>
+  <action name="actionAutoRun">
+   <property name="text">
+    <string>AutoRun</string>
+   </property>
+   <property name="shortcut">
+    <string>Alt+R</string>
    </property>
   </action>
  </widget>

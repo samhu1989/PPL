@@ -72,7 +72,6 @@ class PPBase(object):
         self.set_offset = tf.assign(self.offset,self.extern_offset);
         
         self.out_xy_idx = tf.constant([0,1],dtype=tf.int32,shape=[2],name="out_xy_idx");
-        
         out_xy = tf.gather(self.out,self.out_xy_idx);
         self.out_xy = tf.add(out_xy,self.offset,name="out_xy");
         
@@ -273,7 +272,6 @@ def layout2ResultV3(xyz,viewSize,w,h,sw,sh):
     lbl += 1;
     return lbl;
     
-        
 def draw_box2D(size,xy,name=None):
     g1 = [0,1,2,3,0];
     g2 = [4,5,6,7,4];
