@@ -8,6 +8,7 @@ import os;
 from PyQt5.QtCore import Qt,pyqtSignal,pyqtSlot;
 from InterpZ import fillZ;
 from InterpZ import orderZ;
+from InterpZ import interpZ;
 np.set_printoptions(threshold=np.inf); 
 
 class PPBase(object):
@@ -388,7 +389,6 @@ def test_run4():
     print(res1);
     print(res3);
     print(pixAcc(gt,res1),pixAcc(gt,res2),pixAcc(gt,res3));
-    
     
 def main():
     test_run4();

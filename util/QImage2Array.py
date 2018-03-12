@@ -6,6 +6,7 @@ Created on Sat Feb 17 10:37:48 2018
 """
 import numpy as np;
 from PyQt5 import QtGui;
+from PyQt5.QtCore import Qt;
 
 def convertQImageToArray(incomingImage):
     incomingImage = incomingImage.convertToFormat(QtGui.QImage.Format_RGB32);
@@ -38,8 +39,12 @@ def convertLabelToQImage(lbl):
     msk.setColorTable(mskCTable);
     return msk;
 
-def convertQImageToLabel(img):
-    assert img.format() == QtGui.QImage.Format_Indexed8;
+GrayTable = [ QtGui.qRgb(x,x,x) for x in range(256) ];
+
+def convertQImageToLabel(oldimg):
+    assert oldimg.format() == QtGui.QImage.Format_Indexed8;
+    img = oldimg.copy();
+    img.setColorTable(GrayTable);
     img = img.convertToFormat(QtGui.QImage.Format_Grayscale8);
     w = img.width();
     h = img.height();
@@ -54,3 +59,23 @@ def convertQImageToLabel(img):
     ptr.setsize(imgpad.byteCount());
     lbl = np.array(ptr,dtype=np.uint8).reshape(imgpad.height(),imgpad.width());
     return lbl[0:h,0:w];
+
+def convertQImageToLabel2(oldimg):
+    assert oldimg.format() == QtGui.QImage.Format_Indexed8;
+    img = oldimg.copy();
+    img.setColorTable(GrayTable);
+    img = img.convertToFormat(QtGui.QImage.Format_Grayscale8);
+    w = img.width();
+    h = img.height();
+    s = 2**np.ceil(np.log2(max(w,h)));
+    imgpad = QtGui.QImage(s,s,QtGui.QImage.Format_Grayscale8);
+    imgpad.fill(Qt.black);
+    painter = QtGui.QPainter();
+    painter.begin(imgpad);
+    painter.drawImage((imgpad.width() - img.width())//2,(imgpad.height() - img.height())//2,img);
+    painter.end();
+    ptr = imgpad.bits();
+    assert imgpad.byteCount() == (imgpad.width()*imgpad.height());
+    ptr.setsize(imgpad.byteCount());
+    lbl = np.array(ptr,dtype=np.uint8).reshape(imgpad.height(),imgpad.width());
+    return lbl;
