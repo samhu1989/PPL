@@ -65,6 +65,7 @@ class PPPix(PPAffine):
         self.edge_pts_flat = tf.reshape(self.edge_pts,[2,-1],name='edge_pts_flat');
         self.nnidx = tf.placeholder(tf.int32,shape=[256,256,5],name='nnidx');
         self.nnp = tf.gather(self.edge_pts_flat,self.nnidx,axis=1,name='nnp');
+        print(self.nnp.shape);
         self.dist = -tf.reduce_sum( tf.square( self.xy_grid - self.nnp ),axis=0,name='dist');
         
     def get_gt_lbl(self,msk):
@@ -120,7 +121,7 @@ class PPPix(PPAffine):
                 mask = (index >= start) & ( index < end );
                 index[mask] -= start;
                 index[mask] += fedge_idx[j]*512;
-            nnidx[:,:,0] = index.reshape((256,256));
+            nnidx[:,:,i] = index.reshape((256,256));
         return nnidx;
         
     def ViewCoordToNormCoord(self,coord):
