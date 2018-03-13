@@ -21,9 +21,10 @@ class PPThread(QtCore.QThread):
         self.timer = QtCore.QTimer();
         self.timer.setSingleShot(False);
         self.timer.moveToThread(self);
+        self.timer.setInterval(1);
         
     def run(self):
-        self.timer.start(1);
+        self.timer.start();
         self.exec();
 #This is work to be done inside the optimization
 class PPWork(QtCore.QObject):
