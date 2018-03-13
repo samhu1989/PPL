@@ -17,7 +17,7 @@ from VDialog import VDialog;
 #This is thread for optimization
 class PPThread(QtCore.QThread):
     def __init__(self,parent):
-        super().__init__(parent);
+        super(PPThread,self).__init__(parent);
         self.timer = QtCore.QTimer();
         self.timer.setSingleShot(False);
         self.timer.moveToThread(self);
@@ -29,7 +29,7 @@ class PPThread(QtCore.QThread):
 #This is work to be done inside the optimization
 class PPWork(QtCore.QObject):
     def __init__(self,parent):
-        super().__init__(parent);
+        super(PPWork,self).__init__(parent);
         self.ppl = PPW("/cpu:0");
         config = tf.ConfigProto();
         config.allow_soft_placement = True;
