@@ -14,7 +14,11 @@ from InterpZ import areaFromV;
 from InterpZ import fequal;
 from scipy.spatial import cKDTree;
 from PPLUi import PPThread;
-util_path = os.path.dirname(__file__)+os.sep+".."+os.sep+"net";
+path = os.path.dirname(__file__);
+if path:
+    util_path = path+os.sep+".."+os.sep+"net";
+else:
+    util_path = ".."+os.sep+"net";
 sys.path.append(util_path);
 from data import listdir;
 
