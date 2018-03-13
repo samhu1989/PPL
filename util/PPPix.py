@@ -290,6 +290,7 @@ if __name__ == "__main__":
     lmat[lmat==2]=4;
         #print(xy);
     #img = convertLabelToQImage(inside_lbl.astype(np.uint8));
+    os.environ['CUDA_VISIBLE_DEVICES']=""
     qlbl = PPPixLabel();
     qlbl.setGT(lmat);
     qlbl.updateimg();
