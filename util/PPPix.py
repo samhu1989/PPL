@@ -289,5 +289,5 @@ if __name__ == "__main__":
     #qlbl.setPixmap(QtGui.QPixmap.fromImage(img));
     qlbl.show();
     qlbl.start();
-    qapp.exec();
+    qapp.exec_();
     
