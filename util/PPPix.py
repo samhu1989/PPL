@@ -282,7 +282,10 @@ class PPPixLabel(QLabel):
         
 if __name__ == "__main__":
     qapp = QApplication(sys.argv);
-    layout = listdir("E:\\WorkSpace\\LSUN\\layout\\layout_seg",".mat");
+    try:
+        layout = listdir("E:\\WorkSpace\\LSUN\\layout\\layout_seg",".mat");
+    except:
+        layout = listdir("/data4T1/samhu/LSUN/layout/layout_seg",".mat");
     lmat = loadmat(layout[9])['layout'].copy();
     lmat[lmat==2]=4;
         #print(xy);
