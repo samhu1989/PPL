@@ -142,7 +142,7 @@ class PPPix(PPAffine):
         #probability depend max depth if inside the face
         self.__get_depth__();
         #prob
-        self.debug_prob = tf.reduce_sum(self.gt_lbl*tf.sigmoid(self.max_depth*self.inside + (1.0 - self.inside)*self.dist),axis=2);
+        self.debug_prob = tf.reduce_sum(self.gt_lbl*(self.max_depth*self.inside + (1.0 - self.inside)*self.dist),axis=2);
         self.prob = tf.nn.softmax(self.max_depth*self.inside + (1.0 - self.inside)*self.dist,dim=-1);
         self.cross_entropy = tf.reduce_sum(tf.negative(self.gt_lbl*tf.log(self.prob)),axis=2,name='cross_entropy');
         self.gt_loss = tf.reduce_mean(self.cross_entropy,name='gt_loss');
@@ -153,7 +153,7 @@ class PPPix(PPAffine):
         
 class PPPixWork(QtCore.QObject):
     def __init__(self,parent=None):
-        super().__init__(parent);
+        super(PPPixWork,self).__init__(parent);
         self.ppl = PPPix("/cpu:0");
         config = tf.ConfigProto();
         config.allow_soft_placement = True;
@@ -172,7 +172,7 @@ class PPPixWork(QtCore.QObject):
         self.gt,self.gt_lbl,_ = self.ppl.get_gt_lbl(lmat);
         
     def getLabel(self):
-        out_xy = self.sess.run(self.ppl.out_xy_hard);
+        out_xy = self.sess.run(self.ppl.out_xy);
         inside = self.ppl.get_inside(out_xy);
         edge_pts = self.sess.run(self.ppl.edge_pts);
         nnidx = self.ppl.get_nn_idx(edge_pts);
@@ -186,7 +186,7 @@ class PPPixWork(QtCore.QObject):
         return lbl.astype(np.uint8);
     
     def getDebug(self):
-        out_xy = self.sess.run(self.ppl.out_xy_hard);
+        out_xy = self.sess.run(self.ppl.out_xy);
         inside = self.ppl.get_inside(out_xy);
         edge_pts = self.sess.run(self.ppl.edge_pts);
         nnidx = self.ppl.get_nn_idx(edge_pts);
@@ -196,16 +196,25 @@ class PPPixWork(QtCore.QObject):
                 self.ppl.nnidx:nnidx
                 };
         debug = self.sess.run(self.ppl.debug_prob,feed_dict=feed);
-        print(debug.min(),debug.mean(),debug.max());
+        debug -= debug.min();
+        debug /= debug.max();
         debug *= 255.0;
         array = debug.astype(np.uint8);
-        print(array.min(),array.std(),array.mean(),array.max());
-        img = QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1],QtGui.QImage.Format_Grayscale8);
-        return img;
+        imgs = [];
+        imgs.append(QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1],QtGui.QImage.Format_Grayscale8));
+        dist = self.sess.run(self.ppl.dist,feed_dict=feed);
+        for i in range(5):
+            debug = dist[:,:,i];
+            debug -= debug.min();
+            debug /= debug.max();
+            debug *= 255.0;
+            array = debug.astype(np.uint8);
+            imgs.append(QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1],QtGui.QImage.Format_Grayscale8));
+        return imgs;
     
     def optimize(self):
         for i in range(3):
-            out_xy = self.sess.run(self.ppl.out_xy_hard);
+            out_xy = self.sess.run(self.ppl.out_xy);
             inside = self.ppl.get_inside(out_xy);
             edge_pts = self.sess.run(self.ppl.edge_pts);
             nnidx = self.ppl.get_nn_idx(edge_pts);
@@ -221,14 +230,14 @@ class PPPixWork(QtCore.QObject):
         
 class PPPixLabel(QLabel):
     def __init__(self,parent=None):
-        super().__init__(parent);
+        super(PPPixLabel,self).__init__(parent);
         self.thread = PPThread(self);
         self.work = PPPixWork();
         self.work.moveToThread(self.thread);
-        self.thread.timer.setInterval(500);
+        self.thread.timer.setInterval(1000);
         self.thread.timer.timeout.connect(self.updateimg);
         self.thread.timer.timeout.connect(self.work.optimize);
-        self.imgpad = QtGui.QImage(256*3,256,QtGui.QImage.Format_RGB888);
+        self.imgpad = QtGui.QImage(256*4,256*2,QtGui.QImage.Format_RGB888);
         self.imgpad.fill(Qt.black);
         
     def setGT(self,lmat):
@@ -244,12 +253,18 @@ class PPPixLabel(QLabel):
         print('updating');
         lbl = self.work.getLabel();
         lblimg = (convertLabelToQImage(lbl)).convertToFormat(QtGui.QImage.Format_RGB888);
-        debugimg = self.work.getDebug();
         painter = QtGui.QPainter();
         painter.begin(self.imgpad);
         painter.drawImage(256,0,lblimg);
-        painter.drawImage(512,0,debugimg);
         painter.end();
+        debugimg = self.work.getDebug();
+        for idx,img in enumerate(debugimg):
+            painter.begin(self.imgpad);
+            i = idx+2;
+            ix = i%4;
+            iy = i//4;
+            painter.drawImage(256*ix,256*iy,img);
+            painter.end();
         self.setPixmap(QtGui.QPixmap.fromImage(self.imgpad));
         self.update();
         
@@ -259,7 +274,7 @@ class PPPixLabel(QLabel):
     def closeEvent(self,e):
         self.thread.quit();
         self.thread.wait();
-        super().closeEvent(e);
+        super(PPPixLabel,self).closeEvent(e);
         
 if __name__ == "__main__":
     qapp = QApplication(sys.argv);
