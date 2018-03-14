@@ -24,6 +24,7 @@ from data import listdir;
 
 class PPPix(PPAffine):
     def __init__(self,dev):
+        self.interp_n = 128;
         super(PPPix,self).__init__(dev);
         
     def __get_depth__(self):
@@ -55,18 +56,22 @@ class PPPix(PPAffine):
                 [11,6,10,2]
                 ]
                 ,dtype=np.int32);
-        self.edge_idx = tf.constant(self.edge_idx_v,dtype=tf.int32,shape=[2,1,12],name="edge_idx");
-        self.edge_end = tf.gather(self.out_xy,self.edge_idx,axis=1,name='edge_end');#[2,2,1,12]
-        self.interp_w_v = np.zeros([2,512],dtype=np.float32);
-        self.interp_w_v[0,:] = np.linspace(0.0,1.0,512,dtype=np.float32);
-        self.interp_w_v[1,:] = 1.0 - self.interp_w_v[1,:];
-        self.interp_w = tf.constant(self.interp_w_v,dtype=tf.float32,shape=[1,2,512,1]);
+        self.edge_idx = tf.constant(self.edge_idx_v,dtype=tf.int32,shape=[2,12,1],name="edge_idx");
+        self.edge_end = tf.gather(self.out_xy,self.edge_idx,axis=1,name='edge_end');#[2,2,12,1]
+        self.edge_hard_end = tf.gather(self.out_xy_hard,self.edge_idx,axis=1,name='edge_hard_end');#[2,2,12,1]
+        self.interp_w_v = np.zeros([2,self.interp_n],dtype=np.float32);
+        self.interp_w_v[0,:] = np.linspace(0.0,1.0,self.interp_n,dtype=np.float32);
+        self.interp_w_v[1,:] = 1.0 - self.interp_w_v[0,:];
+        self.interp_w = tf.constant(self.interp_w_v,dtype=tf.float32,shape=[1,2,1,self.interp_n]);
         self.edge_pts = tf.reduce_sum(self.interp_w*self.edge_end,axis=1,name='edge_pts');
+        self.edge_hard_pts = tf.reduce_sum(self.interp_w*self.edge_hard_end,axis=1,name='edge_hard_pts');
         self.edge_pts_flat = tf.reshape(self.edge_pts,[2,-1],name='edge_pts_flat');
+        self.edge_hard_pts_flat = tf.reshape(self.edge_hard_pts,[2,-1],name='edge_hard_pts_flat');
         self.nnidx = tf.placeholder(tf.int32,shape=[256,256,5],name='nnidx');
         self.nnp = tf.gather(self.edge_pts_flat,self.nnidx,axis=1,name='nnp');
-        print(self.nnp.shape);
+        self.nnp_hard = tf.gather(self.edge_hard_pts_flat,self.nnidx,axis=1,name='nnp_hard');
         self.dist = -tf.reduce_sum( tf.square( self.xy_grid - self.nnp ),axis=0,name='dist');
+        self.hard_dist = -tf.reduce_sum( tf.square( self.xy_grid - self.nnp_hard ),axis=0,name='hard_dist');
         
     def get_gt_lbl(self,msk):
         mskimg = QtGui.QImage(msk,msk.shape[1],msk.shape[0],msk.shape[1],QtGui.QImage.Format_Indexed8);
@@ -112,15 +117,15 @@ class PPPix(PPAffine):
         x = np.transpose(x,[1,0]);
         for i in range(5):
             fedge_idx = self.fedge_idx_v[i,:];
-            fedge_pts = np.transpose(pts[:,:,fedge_idx].reshape(2,-1),[1,0]);
+            fedge_pts = np.transpose(pts[:,fedge_idx,:].reshape(2,-1),[1,0]);
             tree = cKDTree(fedge_pts);
-            dist,index = tree.query(x); 
+            dist,index = tree.query(x);
             for j in range(fedge_idx.size):
-                start = j*512;
-                end = (j+1)*512;
+                start = j*self.interp_n;
+                end = (j+1)*self.interp_n;
                 mask = (index >= start) & ( index < end );
                 index[mask] -= start;
-                index[mask] += fedge_idx[j]*512;
+                index[mask] += fedge_idx[j]*self.interp_n;
             nnidx[:,:,i] = index.reshape((256,256));
         return nnidx;
         
@@ -207,6 +212,7 @@ class PPPixWork(QtCore.QObject):
         array = debug.astype(np.uint8);
         imgs = [];
         imgs.append(QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1],QtGui.QImage.Format_Grayscale8));
+        imgs.append(convertLabelToQImage(np.argmax(inside,axis=-1).astype(np.uint8)+1));
         dist = self.sess.run(self.ppl.dist,feed_dict=feed);
         for i in range(5):
             debug = dist[:,:,i];
@@ -215,7 +221,77 @@ class PPPixWork(QtCore.QObject):
             debug *= 255.0;
             array = debug.astype(np.uint8);
             imgs.append(QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1],QtGui.QImage.Format_Grayscale8));
+        #print("out_xy:",out_xy);
+        #print("edge_end:",edge_end[:,:,:,self.ppl.fedge_idx_v[1,:]]);
+        #print("edge_pts:",edge_pts.shape,edge_pts)
         return imgs;
+    
+    def debugDist(self,fi):
+        #out_xy = self.sess.run(self.ppl.out_xy_hard);
+        edge_pts = self.sess.run(self.ppl.edge_hard_pts);
+        #nnidx = np.zeros([256,256,5],dtype=np.int32);
+        #interp_w = self.sess.run(self.ppl.interp_w);
+        #end = self.sess.run(self.ppl.edge_hard_end);
+        x = self.ppl.xy_grid_v.reshape((2,-1));
+        x = np.transpose(x,[1,0]);
+        fedge_idx = self.ppl.fedge_idx_v[fi,:];
+        #print(edge_pts.shape);
+        fedge_pts = np.transpose(edge_pts[:,fedge_idx,:].reshape(2,-1),[1,0]);
+        tree = cKDTree(fedge_pts);
+        dist,index = tree.query(x);
+        dist = -np.square(dist);
+        dist -= dist.min();
+        dist /= dist.max();
+        dist *= 255.0;
+        dist = dist.reshape((256,256));
+        dist = dist.astype(np.uint8);
+        #
+        #print(edge_pts);
+        all_edge_pts = edge_pts.reshape((2,-1));
+        newindex = index.copy();
+        #print(fedge_pts);
+        #print(all_edge_pts.shape);
+        #print(all_edge_pts);
+        #print(index.min(),index.max());
+        for j in range(fedge_idx.size):
+            start = j*self.ppl.interp_n;
+            end = (j+1)*self.ppl.interp_n;
+            #print("start,end",start,end);
+            mask = (index >= start) & ( index < end );
+            #print(np.sum(mask));
+            if np.sum(mask) > 0:
+                newindex[mask] -= start;
+                newindex[mask] += fedge_idx[j]*self.ppl.interp_n;
+                #print("mapped",newindex[mask].min(),newindex[mask].max());
+        #print(index[0],fedge_pts[index[0],:]);
+        #print(newindex[0],all_edge_pts[:,newindex[0]]);
+        #print(index[3],fedge_pts[index[3],:]);
+        #print(newindex[3],all_edge_pts[:,newindex[3]]);
+        #print(all_edge_pts);
+        pts3 = all_edge_pts[:,newindex];
+        dist3 = -np.sum(np.square(self.ppl.xy_grid_v - pts3.reshape((2,256,256))),axis=0);
+        dist3 -= dist3.min();
+        dist3 /= dist3.max();
+        dist3 *= 255.0;
+        dist3 = dist3.astype(np.uint8);
+        #
+        dist4 = -np.sum(np.square(self.ppl.xy_grid_v - np.transpose(fedge_pts[index,:],[1,0]).reshape((2,256,256))),axis=0);
+        dist4 -= dist4.min();
+        dist4 /= dist4.max();
+        dist4 *= 255.0;
+        dist4 = dist4.astype(np.uint8);
+        #
+        nnidx = self.ppl.get_nn_idx(edge_pts);
+        feed = {self.ppl.nnidx:nnidx};
+        dist_hard = self.sess.run(self.ppl.hard_dist,feed_dict=feed);
+        dist2 = dist_hard[:,:,fi];
+        dist2 -= dist2.min();
+        dist2 /= dist2.max();
+        dist2 *= 255.0;
+        dist2 = dist2.astype(np.uint8);
+        array = np.concatenate([dist,dist2,dist3,dist4],axis=1);
+        img = QtGui.QImage(array,array.shape[1],array.shape[0],array.shape[1],QtGui.QImage.Format_Grayscale8)
+        return img;
     
     def optimize(self):
         for i in range(3):
@@ -230,8 +306,8 @@ class PPPixWork(QtCore.QObject):
                 self.ppl.nnidx:nnidx
                 };
             _,self.loss_value = self.sess.run([self.ppl.opt,self.ppl.loss],feed_dict=feed);
-        print("norm_loss:",self.sess.run(self.ppl.norm_loss))
-        print("loss:",self.loss_value);
+        #print("norm_loss:",self.sess.run(self.ppl.norm_loss))
+        #print("loss:",self.loss_value);
         self.iter += 1;
         
 class PPPixLabel(QLabel):
@@ -243,7 +319,7 @@ class PPPixLabel(QLabel):
         self.thread.timer.setInterval(1000);
         self.thread.timer.timeout.connect(self.updateimg);
         self.thread.timer.timeout.connect(self.work.optimize);
-        self.imgpad = QtGui.QImage(256*4,256*2,QtGui.QImage.Format_RGB888);
+        self.imgpad = QtGui.QImage(256*5,256*2,QtGui.QImage.Format_RGB888);
         self.imgpad.fill(Qt.black);
         
     def setGT(self,lmat):
@@ -267,8 +343,8 @@ class PPPixLabel(QLabel):
         for idx,img in enumerate(debugimg):
             painter.begin(self.imgpad);
             i = idx+2;
-            ix = i%4;
-            iy = i//4;
+            ix = i%5;
+            iy = i//5;
             painter.drawImage(256*ix,256*iy,img);
             painter.end();
         self.setPixmap(QtGui.QPixmap.fromImage(self.imgpad));
@@ -282,7 +358,7 @@ class PPPixLabel(QLabel):
         self.thread.wait();
         super(PPPixLabel,self).closeEvent(e);
         
-if __name__ == "__main__":
+def main():
     qapp = QApplication(sys.argv);
     try:
         layout = listdir("E:\\WorkSpace\\LSUN\\layout\\layout_seg",".mat");
@@ -299,5 +375,26 @@ if __name__ == "__main__":
     #qlbl.setPixmap(QtGui.QPixmap.fromImage(img));
     qlbl.show();
     qlbl.start();
-    qapp.exec_();
+    return qapp.exec_();
+    
+def debug_dist():
+    qapp = QApplication(sys.argv);
+    try:
+        layout = listdir("E:\\WorkSpace\\LSUN\\layout\\layout_seg",".mat");
+    except:
+        layout = listdir("/data4T1/samhu/LSUN/layout/layout_seg",".mat");
+    lmat = loadmat(layout[9])['layout'].copy();
+    lmat[lmat==2]=4;
+    os.environ['CUDA_VISIBLE_DEVICES']=""
+    qlbl = QLabel();
+    work = PPPixWork();
+    img = work.debugDist(0);
+    qlbl.setPixmap(QtGui.QPixmap.fromImage(img));
+    qlbl.show();
+    return qapp.exec_();
+    
+        
+if __name__ == "__main__":
+    main();
+
     
