@@ -306,8 +306,8 @@ class PPPixWork(QtCore.QObject):
                 self.ppl.nnidx:nnidx
                 };
             _,self.loss_value = self.sess.run([self.ppl.opt,self.ppl.loss],feed_dict=feed);
-        #print("norm_loss:",self.sess.run(self.ppl.norm_loss))
-        #print("loss:",self.loss_value);
+        print("norm_loss:",self.sess.run(self.ppl.norm_loss))
+        print("loss:",self.loss_value);
         self.iter += 1;
         
 class PPPixLabel(QLabel):
