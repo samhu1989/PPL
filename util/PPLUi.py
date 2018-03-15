@@ -14,6 +14,7 @@ import numpy as np;
 import tensorflow as tf;
 import h5py;
 from VDialog import VDialog;
+from SpinDialog import SpinDialog;
 #This is thread for optimization
 class PPThread(QtCore.QThread):
     def __init__(self,parent):
@@ -207,7 +208,7 @@ class PPTargetItem(QtWidgets.QGraphicsEllipseItem):
         if self.corneridx is not None:
             maxidx = len(self.corners);
             item = self.corners[self.corneridx%maxidx];
-            print("update to",item.scenePos());
+            #print("update to",item.scenePos());
             self.setPos(item.scenePos());
             self.updateLine();
         return;
@@ -310,11 +311,12 @@ class PPLWidget(QMainWindow):
         self.actionDebug_Layout2Res.triggered.connect(self.layout2Res);
         self.actionReload.triggered.connect(self.reload);
         self.actionAutoRun.triggered.connect(self.autoRun);
+        self.actionJumpTo.triggered.connect(self.loadnth);
     
     def closeEvent(self,event):
         if self.LSUNRoot is not None:
             self.saveCurrent();
-        super().closeEvent(event);
+        super(PPLWidget,self).closeEvent(event);
     
     def loaddataset(self,fname):
         basename = fname.split('.')[-2];
@@ -331,13 +333,14 @@ class PPLWidget(QMainWindow):
     @pyqtSlot()
     def setLSUNRoot(self):
         self.LSUNRoot = QFileDialog.getExistingDirectory(self,'Open Dir','E:/WorkSpace/');
-        self.loaddataset("training.mat");
-        self.loaddataset("validation.mat");
-        self.loaddataset("testing.mat");
-        self.index = 0;
-        self.train_num = self.dataset['training']['training'].size;
-        self.valid_num = self.dataset['validation']['validation'].size;
-        self.loadCurrent();
+        if self.LSUNRoot:
+            self.loaddataset("training.mat");
+            self.loaddataset("validation.mat");
+            self.loaddataset("testing.mat");
+            self.index = 0;
+            self.train_num = self.dataset['training']['training'].size;
+            self.valid_num = self.dataset['validation']['validation'].size;
+            self.loadCurrent();
         
     @pyqtSlot()    
     def reload(self):
@@ -375,6 +378,20 @@ class PPLWidget(QMainWindow):
         self.updateLayout();
         for item in self.targetItems:
             item.updateLine();
+            
+    @pyqtSlot()
+    def loadnth(self):
+        if self.LSUNRoot is None:
+            return;
+        dialog = SpinDialog();
+        dialog.spinBox.setMaximum(self.train_num-1);
+        dialog.spinBox.setValue(self.index);
+        ret = dialog.exec_();
+        if ret==QDialog.Accepted:
+            self.saveCurrent();
+            self.index = dialog.spinBox.value();
+            self.loadCurrent();
+        return;
         
     @pyqtSlot()    
     def loadNext(self):
@@ -401,6 +418,7 @@ class PPLWidget(QMainWindow):
         else:
             self.index = 0;
             self.current_name = self.dataset['training']['training'][0,self.index][0][0];
+        self.statusbar.showMessage("tag:%s"%self.current_name);
         self.loadPixmap();
         self.loadMask();           
         w = self.img.width();
@@ -441,7 +459,7 @@ class PPLWidget(QMainWindow):
                 item.updateLine();
             if 'layout' in self.packfile.keys():
                 loss = np.mean(np.sum(np.square(self.work.sess.run(self.work.ppl.out_xy_hard) - self.packfile['layout'][...]),axis=0));
-                self.statusbar.showMessage("[%d]:reload loss:%f"%(self.index,loss));
+                self.statusbar.showMessage("[%d]:reload loss:%f,tag:%s"%(self.index,loss,self.current_name));
         else:
             self.packfile.create_dataset('affine',[3,4],dtype='float32',compression="gzip");
             self.packfile.create_dataset('offset',[2,1],dtype='float32',compression="gzip");
@@ -704,8 +722,19 @@ class PPLWidget(QMainWindow):
             self.thread.quit();
         QtWidgets.QMainWindow.keyReleaseEvent(self,event);
         
-if __name__ == '__main__':
+def main():
     app = QApplication(sys.argv);
     w = PPLWidget();
     w.show();
     sys.exit(app.exec_());
+    
+def debug():
+    app = QApplication(sys.argv);
+    path = 'E:\\WorkSpace\\PPL\\data\\LSUN\\image\\images\\sun_bjtwrpkhguvoonyp.jpg'
+    img = QtGui.QImage(path);
+    if img.isNull():
+        print()
+    print(img.width(),img.height());
+        
+if __name__ == '__main__':
+    main();

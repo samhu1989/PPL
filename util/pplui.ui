@@ -46,6 +46,7 @@
     <addaction name="actionDouble_Learning_Rate"/>
     <addaction name="actionHalf_Learning_Rate"/>
     <addaction name="actionAutoRun"/>
+    <addaction name="actionJumpTo"/>
    </widget>
    <widget class="QMenu" name="menuDebug">
     <property name="title">
@@ -131,6 +132,14 @@
    </property>
    <property name="shortcut">
     <string>Alt+R</string>
+   </property>
+  </action>
+  <action name="actionJumpTo">
+   <property name="text">
+    <string>Jump To</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+J</string>
    </property>
   </action>
  </widget>
