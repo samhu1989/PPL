@@ -361,7 +361,7 @@ class PPPixLabel(QLabel):
 def main():
     qapp = QApplication(sys.argv);
     try:
-        layout = listdir("E:\\WorkSpace\\LSUN\\layout\\layout_seg",".mat");
+        layout = listdir("E:\\WorkSpace\\PPL\\data\\LSUN\\layout\\layout_seg",".mat");
     except:
         layout = listdir("/data4T1/samhu/LSUN/layout/layout_seg",".mat");
     lmat = loadmat(layout[9])['layout'].copy();
@@ -380,7 +380,7 @@ def main():
 def debug_dist():
     qapp = QApplication(sys.argv);
     try:
-        layout = listdir("E:\\WorkSpace\\LSUN\\layout\\layout_seg",".mat");
+        layout = listdir("E:\\WorkSpace\\PPL\\data\\LSUN\\layout\\layout_seg",".mat");
     except:
         layout = listdir("/data4T1/samhu/LSUN/layout/layout_seg",".mat");
     lmat = loadmat(layout[9])['layout'].copy();
