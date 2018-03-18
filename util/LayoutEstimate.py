@@ -10,6 +10,7 @@ from QImage2Array import convertQImageToLabel;
 import h5py;
 from PPL import layout2ResultV3;
 from QImage2Array import convertLabelToQImage;
+import sys;
 
 if __name__ == "__main__":
     path = "E:\\WorkSpace\\PPL\\data\\LSUN"
@@ -20,8 +21,8 @@ if __name__ == "__main__":
         train_data = loadmat(path+os.sep+'training.mat');
     res = [];
     score = [];
-    #for i in range(train_data['training'].shape[1]):
-    for i in range(5):
+    for i in range(train_data['training'].shape[1]):
+    #for i in range(5):
         name = train_data['training'][0,i][0][0]
         lmat = loadmat(path+os.sep+'layout'+os.sep+'layout_seg'+os.sep+name+'.mat');
         lgt = lmat['layout'].copy();
@@ -37,6 +38,7 @@ if __name__ == "__main__":
             score.append(acc);
             res.append(name);
             print(i,res[-1],score[-1]);
+            sys.stdout.flush();
     scorearray = np.array(score);
     resarray = np.array(res);
     scorei = np.argsort(-scorearray);

@@ -96,7 +96,7 @@ class PPNet(PPAffine):
         self.out_norm = tf.gather(self.out,self.out_norm_idx,name="out_norm",axis=1);
         self.norm_loss = tf.reduce_mean(tf.square(self.out_norm - 1.0),name="norm_loss");
         self.reg_loss = tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))*0.1;
-        self.loss = self.gt_loss + self.reg_loss + 100.0*self.norm_loss ;
+        self.loss = 10.0*self.gt_loss + self.reg_loss + 1000.0*self.norm_loss ;
         #
         self.gt_affine = tf.placeholder(tf.float32,shape=[None,3,4],name="gt_affine");
         self.gt_offset = tf.placeholder(tf.float32,shape=[None,2,1],name="gt_offset");
