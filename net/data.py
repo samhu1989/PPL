@@ -14,6 +14,7 @@ import sys;
 util_path = os.path.dirname(__file__)+os.sep+".."+os.sep+"util";
 sys.path.append(util_path);
 from QImage2Array import convertQImageToArray;
+from QImage2Array import scaleLabel;
 
 def listdir(dir_,suffix=None):
     lst = os.listdir(dir_);
@@ -70,7 +71,7 @@ class Data(threading.Thread):
                 self.next_idx();
                 continue;
             if need_scale:
-                
+                lbl = scaleLabel(lbl,512);
             imgscaled = img.scaled(self.sizes[2],self.sizes[1],Qt.KeepAspectRatio);
             imgpad = QtGui.QImage(self.sizes[2],self.sizes[1],QtGui.QImage.Format_RGB888);
             imgpad.fill(Qt.black);

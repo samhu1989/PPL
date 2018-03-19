@@ -4,9 +4,19 @@ Created on Sat Feb 17 10:37:48 2018
 
 @author: SamHu
 """
+import sys;
+import os;
 import numpy as np;
 from PyQt5 import QtGui;
-from PyQt5.QtCore import Qt;
+from PyQt5.QtCore import Qt,QCoreApplication;
+from scipy.io import loadmat;
+path = os.path.dirname(__file__);
+if path:
+    util_path = path+os.sep+".."+os.sep+"net";
+else:
+    util_path = ".."+os.sep+"net";
+sys.path.append(util_path);
+from data import *;
 
 def convertQImageToArray(incomingImage):
     incomingImage = incomingImage.convertToFormat(QtGui.QImage.Format_RGB32);
@@ -41,6 +51,36 @@ def convertLabelToQImage(lbl):
 
 GrayTable = [ QtGui.qRgb(x,x,x) for x in range(256) ];
 
+def scaleLabel(lbl,size):
+    img = QtGui.QImage(lbl,lbl.shape[1],lbl.shape[0],lbl.shape[1],QtGui.QImage.Format_Grayscale8);
+    img = img.scaled(size,size,Qt.KeepAspectRatio);
+    w = img.width();
+    h = img.height();
+    s = 2**np.ceil(np.log2(max(w,h)));
+    imgpad = QtGui.QImage(s,s,QtGui.QImage.Format_Grayscale8);
+    painter = QtGui.QPainter();
+    painter.begin(imgpad);
+    painter.drawImage(0,0,img);
+    painter.end();
+    ptr = imgpad.bits();
+    assert imgpad.byteCount() == (imgpad.width()*imgpad.height());
+    ptr.setsize(imgpad.byteCount());
+    lbl = np.array(ptr,dtype=np.uint8).reshape(imgpad.height(),imgpad.width());
+    return lbl[0:h,0:w];
+
+def testscaleLabel():
+    qapp = QCoreApplication(sys.argv);
+    try:
+        layout = listdir("E:\\WorkSpace\\PPL\\data\\LSUN\\layout\\layout_seg",".mat");
+    except:
+        layout = listdir("/data4T1/samhu/LSUN/layout/layout_seg",".mat");
+    lmat = loadmat(layout[135])['layout'].copy();
+    img = convertLabelToQImage(lmat);
+    img.save('./lbl.png');
+    lmatscaled = scaleLabel(lmat,512);
+    imgscaled = convertLabelToQImage(lmatscaled);
+    imgscaled.save('./scalelbl.png');
+    
 def convertQImageToLabel(oldimg):
     assert oldimg.format() == QtGui.QImage.Format_Indexed8;
     img = oldimg.copy();
@@ -79,3 +119,6 @@ def convertQImageToLabel2(oldimg):
     ptr.setsize(imgpad.byteCount());
     lbl = np.array(ptr,dtype=np.uint8).reshape(imgpad.height(),imgpad.width());
     return lbl;
+
+if __name__ == "__main__":
+    testscaleLabel();
