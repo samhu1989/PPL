@@ -1,5 +1,6 @@
 import tensorflow as tf;
 import tflearn as tfl;
+from PlainCNN_Bn import *;
 def getNet(net_name,dev,sizes):
     return eval(net_name)(dev,sizes);
 

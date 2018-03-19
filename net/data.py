@@ -55,6 +55,10 @@ class Data(threading.Thread):
         while i < self.sizes[0]:
             current_name = self.datafile[self.fname][0,self.nameidx][0][0];
             img = QtGui.QImage(self.fpath+os.sep+"image"+os.sep+"images"+os.sep+current_name+'.jpg');
+            need_scale = False;
+            if img.height() > 512 or img.width() > 512:
+                img = img.scaled(512,512,Qt.KeepAspectRatio);
+                need_scale = True;
             if img.isNull():
                 self.next_idx();
                 continue;
@@ -65,6 +69,8 @@ class Data(threading.Thread):
             except:
                 self.next_idx();
                 continue;
+            if need_scale:
+                
             imgscaled = img.scaled(self.sizes[2],self.sizes[1],Qt.KeepAspectRatio);
             imgpad = QtGui.QImage(self.sizes[2],self.sizes[1],QtGui.QImage.Format_RGB888);
             imgpad.fill(Qt.black);

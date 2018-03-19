@@ -31,26 +31,30 @@ def save_valid(tag,img,gt_lbl,res_lbl):
     imgpad.save(fpath);
         
 def valid(valid_data,sess,ppnet,net):
+    loss = 0.0;
     vdata = valid_data.fetch();
     xyz1 = sess.run(ppnet.out_hard_with_offset,
                     feed_dict={
                         net["img"]:vdata["img"],
-                        ppnet.homo_const:ppnet.get_homo_const(1),
-                        ppnet.homo_box:ppnet.get_homo_box(1),
-                        ppnet.perspect_mat:ppnet.get_perspect_mat(1),
-                        ppnet.ext_const:ppnet.get_ext_const(1)
+                        ppnet.homo_const:ppnet.get_homo_const(32),
+                        ppnet.homo_box:ppnet.get_homo_box(32),
+                        ppnet.perspect_mat:ppnet.get_perspect_mat(32),
+                        ppnet.ext_const:ppnet.get_ext_const(32)
                     }
                    );
-    xyz = xyz1[0,0:3,:];
-    w = vdata["whswsh"][0,0];
-    h = vdata["whswsh"][0,1];
-    sw = vdata["whswsh"][0,2];
-    sh = vdata["whswsh"][0,3];
-    lbl = layout2ResultV3(xyz,256,w,h,sw,sh);
-    gt_lbl = vdata["gt_lbl"][0];
-    valid_loss = max( pixAcc(gt_lbl,lbl) , pixAcc(lbl,gt_lbl) );
-    save_valid(vdata["tag"][0],vdata["origin_img"][0],gt_lbl,lbl)
-    return valid_loss;
+    for i in range(32):
+        print("valid_%02d"%i);
+        xyz = xyz1[i,0:3,:];
+        w = vdata["whswsh"][i,0];
+        h = vdata["whswsh"][i,1];
+        sw = vdata["whswsh"][i,2];
+        sh = vdata["whswsh"][i,3];
+        lbl = layout2ResultV3(xyz,256,w,h,sw,sh);
+        gt_lbl = vdata["gt_lbl"][i];
+        valid_loss = max( pixAcc(gt_lbl,lbl) , pixAcc(lbl,gt_lbl) );
+        loss += valid_loss;
+        save_valid(vdata["tag"][i],vdata["origin_img"][i],gt_lbl,lbl)
+    return loss / 32.0;
 
 def train(dev):
     sizes = [32,256,256];
@@ -68,12 +72,12 @@ def train(dev):
         train_writer = tf.summary.FileWriter("%s/train"%(dumpdir),graph=sess.graph);
         valid_writer = tf.summary.FileWriter("%s/valid"%(dumpdir),graph=sess.graph);
         ckpt = tf.train.get_checkpoint_state('%s/'%dumpdir);
-        doPreTrain = True;
+        doPreTrain = False;
         if ckpt and ckpt.model_checkpoint_path:  
             saver.restore(sess,ckpt.model_checkpoint_path);
             doPreTrain = False;
         train_data = Data(datadir+os.sep+"training.mat",[32,256,256,3]);
-        valid_data = Data(datadir+os.sep+"validation.mat",[1,256,256,3]);
+        valid_data = Data(datadir+os.sep+"validation.mat",[32,256,256,3]);
         #pretrain
         try:
             train_data.start();
@@ -103,7 +107,7 @@ def train(dev):
                         saver.save(sess,'%s/'%dumpdir+"model_epoch%d.ckpt"%(step//(train_data.namenum//train_data.sizes[0])));
                     print("pretrain:",step);
             #train 
-            for i in range(4096):
+            for i in range(100000):
                 data = train_data.fetch();
                 _,sum_r,step = sess.run([ppnet.opt,ppnet.sum_op,ppnet.step],
                     feed_dict={
@@ -119,7 +123,7 @@ def train(dev):
                             }
                      );
                 train_writer.add_summary(sum_r,step);
-                if step % (train_data.namenum//train_data.sizes[0]) == 0:
+                if step % (10*train_data.namenum//train_data.sizes[0]) == 0:
                     valid_loss = valid(valid_data,sess,ppnet,net);
                     print(valid_loss);
                     sum_r = sess.run(valid_sum,feed_dict={valid_v:valid_loss});
