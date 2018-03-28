@@ -40,6 +40,7 @@ if __name__ == "__main__":
     print(train_data['training'].shape);
     for i in range(train_data['training'].shape[1]):
         idx = train_data['training'][0,i][2][0][0];
+        print(train_data['training'][0,i][2][0][0])
         while len(layoutypeidx) <= idx:
             layoutypeidx.append([]);
         layoutypeidx[idx].append(i);
@@ -49,7 +50,7 @@ if __name__ == "__main__":
         idxlst = layoutypeidx[i];
         print(len(idxlst));
         matdict['training'] = train_data['training'][0,idxlst];
-        savemat("E:\\WorkSpace\\LSUN\\training%d.mat"%i,matdict);
+        #savemat("E:\\WorkSpace\\LSUN\\training%d.mat"%i,matdict);
             
             
         

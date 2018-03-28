@@ -8,8 +8,7 @@ from PyQt5 import QtCore, QtGui, QtOpenGL,QtWidgets;
 from PyQt5.QtWidgets import QApplication,QFileDialog,QMainWindow,QMessageBox,QDialog;
 from PyQt5.uic import loadUi;
 from scipy.io import loadmat;
-from QImage2Array import convertQImageToArray;
-from QImage2Array import convertArrayToQImage;
+from QImage2Array import *;
 import numpy as np;
 import tensorflow as tf;
 import h5py;
@@ -31,11 +30,23 @@ class PPThread(QtCore.QThread):
 class PPWork(QtCore.QObject):
     def __init__(self,parent):
         super(PPWork,self).__init__(parent);
+        self.__init_ppl__();
+        self.__init_sess__();
+        self.__init_const__();
+        self.gt_items = None;
+        self.lrate = 0.001;
+        self.iter = 0;
+        
+    def __init_ppl__(self):
         self.ppl = PPW("/cpu:0");
+    
+    def __init_sess__(self):
         config = tf.ConfigProto();
         config.allow_soft_placement = True;
         self.sess = tf.Session(config=config);
         self.sess.run(tf.global_variables_initializer());
+        
+    def __init_const__(self):
         self.init_affine = np.array(
                 [[ 7.68641138,0.0,0.0,0.0],
                  [ 0.0,-7.68641138,0.0,0.0],
@@ -47,12 +58,9 @@ class PPWork(QtCore.QObject):
         self.init_scale = np.array(
                 [[1.0],[1.0]],dtype=np.float32);
         self.sess.run(self.ppl.set_affine,feed_dict={self.ppl.extern_affine:self.init_affine});
-        self.lrate = 0.001;
-        self.gt_items = None;
         self.gt = np.array([[1.2,1.3,-1.3,-1.1,1.0,1.1,-1.1,-1],[1.25,-1.0,-1.3,1.4,1.0,-0.7,-0.9,1.15]],dtype=np.float32);
         self.w  = np.array([[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0]],dtype=np.float32);
         self.loss_value = self.sess.run(self.ppl.loss,feed_dict={self.ppl.w:self.w,self.ppl.gt_xy:self.gt});
-        self.iter = 0;
         
     def reset(self,affine=None,offset=None,scale=None):
         if affine is None:
@@ -63,10 +71,6 @@ class PPWork(QtCore.QObject):
             self.sess.run(self.ppl.set_offset,feed_dict={self.ppl.extern_offset:self.init_offset});
         else:
             self.sess.run(self.ppl.set_offset,feed_dict={self.ppl.extern_offset:offset});
-        #if scale is None:
-            #self.sess.run(self.ppl.set_scale,feed_dict={self.ppl.extern_scale:self.init_scale});
-        #else:
-            #self.sess.run(self.ppl.set_scale,feed_dict={self.ppl.extern_scale:scale});
         
     def setPPLWidget(self,w):
         assert isinstance(w,PPLWidget),'Invalid PPLWidget';
@@ -109,9 +113,6 @@ class PPWork(QtCore.QObject):
     
     def getOffset(self):
         return self.sess.run(self.ppl.offset);
-    
-    #def getScale(self):
-        #return self.sess.run(self.ppl.scale);
     
     @pyqtSlot()
     def prepareOptimize(self):
@@ -247,11 +248,10 @@ class PPTargetItem(QtWidgets.QGraphicsEllipseItem):
         if change == QtWidgets.QGraphicsItem.ItemToolTipHasChanged:
             QtWidgets.QToolTip.showText(self.scenePos().toPoint(),value);
         return super().itemChange(change,value);
-
-            
+#
 class PPLWidget(QMainWindow):
-    def __init__(self):
-        super().__init__()     
+    def __init__(self,parent=None,work=None):
+        super(PPLWidget,self).__init__(parent);
         loadUi('./pplui.ui',self);
         self.dataset={};
         self.graphicsScene = QtWidgets.QGraphicsScene();
@@ -296,6 +296,7 @@ class PPLWidget(QMainWindow):
         self.graphicsScene.addItem(self.mskItem);
         self.graphicsScene.addItem(self.origin);
         #
+        self.work = work;
         self.initWork();
         self.initLayout();
         self.initTarget();
@@ -427,8 +428,10 @@ class PPLWidget(QMainWindow):
         sh = self.imgscaled.height();
         if self.index < self.train_num:
             self.current_corners = self.ImgCoordToNormCoord(w,h,sw,sh,self.dataset['training']['training'][0,self.index][3][:]);
+            self.current_type = self.dataset['training']['training'][0,self.index][2][0][0];
         else:
             self.current_corners = self.ImgCoordToNormCoord(w,h,sw,sh,self.dataset['validation']['validation'][0,self.index-self.train_num][3][:]);
+            self.current_type = self.dataset['validation']['validation'][0,self.index][2][0][0];
         self.loadCorners();
         #print("===")
         for item in self.targetItems:
@@ -653,7 +656,8 @@ class PPLWidget(QMainWindow):
         
     def initWork(self):
         self.thread = PPThread(self);
-        self.work = PPWork(None);
+        if self.work is None:
+            self.work = PPWork(None);
         self.work.setPPLWidget(self);        
 
     def connectWork(self):
@@ -665,7 +669,6 @@ class PPLWidget(QMainWindow):
         for item in self.targetItems:
             self.thread.timer.timeout.connect(item.updateLine);
         self.thread.timer.timeout.connect(self.showLoss);
-        
         
     def keyPressEvent(self, event):
         if not type(event) == QtGui.QKeyEvent:

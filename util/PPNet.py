@@ -37,8 +37,8 @@ class PPNet(PPAffine):
     
     def get_homo_box(self,batch_size):
         one_box = np.array(
-                [[[ 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,-0.1],
-                 [-0.1, 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1],
+                [[[ -0.1, 0.1,0.1,-0.1, -0.1, 0.1,0.1,-0.1],
+                 [ 0.1, 0.1, -0.1,-0.1,0.1, 0.1, -0.1,-0.1],
                  [ 0.1, 0.1, 0.1, 0.1,-0.1,-0.1,-0.1,-0.1],
                  [   1,   1,   1,   1,   1,   1,   1,   1]
                 ]],dtype=np.float32);
@@ -114,7 +114,8 @@ class PPNet(PPAffine):
         sums = [];
         sums.append(tf.summary.scalar("gt_loss",self.gt_loss));
         sums.append(tf.summary.scalar("norm_loss",self.norm_loss));
-        sums.append(tf.summary.scalar("reg_loss",self.reg_loss));
+        if self.reg_loss is not None:
+            sums.append(tf.summary.scalar("reg_loss",self.reg_loss));
         sums.append(tf.summary.scalar("loss",self.loss));
         sums.append(tf.summary.scalar("preloss",self.pre_loss));
         self.sum_op = tf.summary.merge(sums);

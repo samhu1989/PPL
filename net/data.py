@@ -13,8 +13,7 @@ from PyQt5.QtCore import Qt,QCoreApplication;
 import sys;
 util_path = os.path.dirname(__file__)+os.sep+".."+os.sep+"util";
 sys.path.append(util_path);
-from QImage2Array import convertQImageToArray;
-from QImage2Array import scaleLabel;
+from QImage2Array import *;
 
 def listdir(dir_,suffix=None):
     lst = os.listdir(dir_);

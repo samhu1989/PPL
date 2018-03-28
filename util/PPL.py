@@ -24,8 +24,8 @@ class PPBase(object):
             
     def __get_box__(self):
         self.box = tf.constant(
-                [ 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,-0.1,
-                 -0.1, 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,
+                [-0.1, 0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,
+                  0.1, 0.1,-0.1,-0.1, 0.1, 0.1,-0.1,-0.1,
                   0.1, 0.1, 0.1, 0.1,-0.1,-0.1,-0.1,-0.1],dtype=tf.float32,shape=[3,8],name="box");
     def __get_deformed_box__(self):
         scale_shape = [3,1];
@@ -63,7 +63,6 @@ class PPBase(object):
         w_idx = tf.constant([3],dtype=tf.int32,shape=[1]);
         w = tf.gather(self.project_box,w_idx);
         self.out_hard = self.project_box / w; 
-
         
     def __get_viewport_map__(self):
         offset_shape = [2,1];
@@ -328,7 +327,7 @@ def test_run():
 
 def gt_simulate():
     gt_lst = [];
-    gt_lst.append({'gt_xy':np.array([[1.5,1.5,-1.5,-1.5,0.5,0.5,-0.5,-0.5],[1.5,-1.5,-1.5,1.5,0.5,-0.5,-0.5,0.5]])});
+    gt_lst.append({'gt_xy':np.array([[-1.5,1.5,1.5,-1.5,-0.5,0.5,0.5,-0.5],[1.5,1.5,-1.5,-1.5,0.5,0.5,-0.5,-0.5]])});
     gt_lst.append({'gt_xy':np.array([[1,1,-1.2,-1.2,0.4,0.4,-0.7,-0.7],[1,-1,-1.2,1.2,0.6,-0.6,-0.8,0.8]],dtype=np.float32)});
     gt_lst.append({'gt_xy':np.array([[1.44,1,-1.4,-2.16,0.6,0.2,-0.4,-0.9],[1.5,-1,-1,1.5,1,-0.4,-0.4,1]],dtype=np.float32)});
     gt_lst.append({'gt_xy':np.array([[1,1.15,-1.15,-1,0.9,1,-1,-0.9],[1,-1.2,-1.2,1,0.9,-1,-1,0.9]],dtype=np.float32)});
@@ -391,7 +390,7 @@ def test_run4():
     print(pixAcc(gt,res1),pixAcc(gt,res2),pixAcc(gt,res3));
     
 def main():
-    test_run4();
+    test_run2();
     
     
 if __name__=="__main__":
